@@ -50,6 +50,12 @@ rate, SHA-256 and generator source. Total WAV payload: 3,411,106 bytes.
 
 ## External sources inspected, not incorporated
 
+Iteration five reuses existing effects through these event aliases; no new WAV
+files or outside licenses were introduced: `overload` → `boss_spawn`,
+`boss_fan` → `enemy_shot`, `boss_radial` → `spark`, `area_warning` → `wave_start`,
+`area_impact` → `hit_heavy`. Two simultaneous area resolutions share a short
+effect cooldown rather than doubling the same impact sample.
+
 Checked on 2026-10-31:
 
 | Source | Author | Official URL | Verified page license | Outcome |

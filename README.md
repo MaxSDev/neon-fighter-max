@@ -47,6 +47,9 @@ nearest-neighbor scaling. Text and interface geometry are drawn afterward at
 The interactive tutorial teaches WASD movement, a sword contact, a connected
 four-hit combo and dash practice against harmless energy shots. ENTER or the
 `OMITIR` button skips to the arena; training can be repeated from the menu.
+Starting a protocol keeps this training flow. Restarting after an ending goes
+directly to a fresh arena. Voluntary training waits for a choice between the
+arena and the menu when complete; no training progress is saved.
 Wave 1 contains five melee drones; wave 2
 has five drones and two ranged units; wave 3 has five drones, three fast units
 and two ranged units. Sentinel-X arrives after all three waves. Victory requires
@@ -59,10 +62,14 @@ Fast units have shorter attack timing, ranged units retreat and fire fixed-aim
 orange projectiles, and Sentinel-X alternates context-dependent melee slams
 and a three-shot energy spread. Orange circles or dashed trajectories announce
 attacks; move or dodge before they resolve. Boss recovery is an attack window.
+At 50% health Sentinel-X enters overload once, announces the change and cycles
+through a five-shot fan, marked energy zones, a radial volley with an open
+escape wedge and two close-range pressure strikes. New overload patterns wait
+for existing hazards to clear. Green lines identify the radial escape wedge.
 
 All enemy health, damage, movement and timing, projectile parameters, spawn
 limits and wave composition are in `neon/balance.py`. See the
-[iteration-three guide](docs/ITERATION_3.md) for values and manual checks.
+[iteration-five guide](docs/ITERATION_5.md) for current values and manual checks.
 
 Sword attacks sweep a hand-anchored blade and can hit each enemy once per swing.
 Preparation, strike and recovery share one pose calculation for drawing and
@@ -96,6 +103,8 @@ focus pauses active play automatically.
 | `neon/projectiles.py` | Energy shots, lifetime, bounds and swept collision |
 | `neon/tutorial.py` | Contextual objectives and safe training emitter |
 | `neon/audio.py` | Real local effects/music, fades, volume and silent fallback |
+| `neon/preferences.py` | Local audio-only INI preferences |
+| `neon/boss_patterns.py` | Announced overload areas and shared projectile pattern angles |
 | `neon/art.py` | Original pixel sprites, floor tiles, consoles and lighting |
 | `neon/renderer.py` | Drawing, sword animation, HUD, buttons and overlays |
 | `tests/` | Standard-library unittest checks of gameplay and rendering |
@@ -135,16 +144,18 @@ patterns in `neon/art.py`; no external art packages or commercial sprites were
 used. Text uses pygame's bundled default font. `assets/` remains available for
 future project-owned resources. Screenshots are generated from this code.
 
-This prototype has no save system, controller support, obstacles
-with pathfinding or settings screen. The tutorial drone is stationary and safe.
+This prototype has no gameplay progress save, controller support or obstacles
+with pathfinding. The tutorial drone is stationary and safe.
 Facing uses horizontal sprite mirroring; sword aim is continuous in all directions.
 Environmental props are decorative. Lighting is painted into the background;
 there are no dynamic shadows. Camera shake, hitstop and impact frames are simple
 effects. Balance, native-window game feel, sustained FPS and Linux runtime
 compatibility still require manual validation.
 
-Music/effects default to 30%/65%. Use menu/pause buttons or F5/F6 and F7/F8 to
-adjust them; M toggles mute. Preferences last for the session. Audio assets are
+Music/effects default to 30%/65%. Open AJUSTES from the menu, use pause controls
+or F5/F6 and F7/F8 to adjust them; M toggles mute. Only volume/mute preferences
+are saved in `settings/audio.ini` after a change. No training or player progress
+is stored. Read/write failures remain nonfatal. Audio assets are
 loaded directly from `assets/audio/` with no runtime internet access. If no audio
 device can initialize, the game continues silently. Included music and effects
 are original procedural WAVs, not placeholders or external commercial samples.

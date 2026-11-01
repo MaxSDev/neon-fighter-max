@@ -1,4 +1,46 @@
-# Current validation: iteration four
+# Current validation: iteration five
+
+Validated 2026-10-31 in the existing Windows / Python 3.12.6 / pygame-ce 2.5.8
+environment. No dependencies or new audio assets were added.
+
+| Check | Result | Boundary |
+| --- | --- | --- |
+| unittest suite | PASS: 71 tests | Existing regressions plus settings/training flow and overload logic |
+| Syntax compilation | PASS | `main.py`, `neon`, `tests`, `tools` |
+| Entry-point smoke test | PASS: 120 frames | SDL dummy video/audio; no hardware performance/listening claim |
+| Preview generation | PASS: 33 PNG fixtures | Includes settings, practice choice and overload patterns |
+
+Tests prove audio-only INI round-trip, fallback/clamping, settings navigation,
+no main-menu volume buttons, direct-arena restart, voluntary practice waiting
+for a choice and ENTER skipping. The temporary directory contains only audio.ini;
+there is no training/progress persistence. Capture and app tests opt out of the
+real preference path. An early test wrote its audio settings to that path; the
+test was isolated and its known generated preference file was removed.
+
+Overload tests cover exact <=50% latching once, no activation on a lethal hit,
+warning times and outputs for all four patterns, one-time area damage, dash
+escape, actual fan/radial projectile gaps, cancellation of old hazards, one
+activation event, no pattern start during stagger/live hazards or zero shot
+budget, staggered ranged shots and boss death through the preserved ending.
+The normal-stat arena controller still reaches victory with 23 kills.
+
+The first new tests failed because the settings/phase APIs were absent. The old
+restart assertion was updated from tutorial to arena, as explicitly requested.
+Existing sword, audio, projectile and lifecycle checks remain passing without
+skips. Real original audio files are unchanged; alias cues are loaded and played
+through the same SDL dummy verification as the original effects.
+
+Static images inspected: clean main menu, settings, voluntary training choice,
+overload notice/core, fan, radial escape wedge and area warnings; pressure and
+area discharge previews also retained. These are staged states, not a manually
+played session. The user's iteration-four manual acceptance does not validate
+this build's new phase-two balance.
+
+Manual play/listening, restart across a real app launch, sustained 60 FPS and
+Linux execution remain pending. Instructions and before/after tuning are in
+[ITERATION_5.md](ITERATION_5.md). Commands are unchanged in the historical records.
+
+# Historical validation: iteration four
 
 Validated 2026-10-31 in the existing Windows / Python 3.12.6 / pygame-ce 2.5.8
 environment. No dependencies installed or upgraded.

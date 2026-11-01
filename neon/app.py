@@ -6,10 +6,11 @@ from neon.renderer import Renderer
 from neon.settings import FPS, INTERNAL_SIZE, WINDOW_SIZE
 from neon.world import World
 from neon.audio import AudioManager
+from neon.preferences import DEFAULT_PREFERENCES
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, preferences_path=DEFAULT_PREFERENCES):
         pygame.display.init()
         pygame.font.init()
         self.window = pygame.display.set_mode(WINDOW_SIZE)
@@ -17,7 +18,8 @@ class Game:
         self.canvas = pygame.Surface(INTERNAL_SIZE)
         self.renderer = Renderer()
         self.world = World()
-        self.audio = AudioManager()
+        self.audio = AudioManager(preferences_path=preferences_path)
+        self.menu_page = 'main'
         self.clock = pygame.time.Clock()
         self.running = True
         self.time = 0
@@ -26,14 +28,23 @@ class Game:
 
     def action(self, name):
         self.audio.play('button')
-        if name in ('play', 'restart', 'training'):
+        if name in ('play', 'training'):
+            self.world.start(practice=name == 'training')
+            self.menu_page = 'main'
+        elif name == 'restart':
             self.world.start()
-        elif name == 'skip':
+            self.world.skip_tutorial()
+        elif name in ('skip', 'continue'):
             self.world.skip_tutorial()
         elif name == 'resume':
             self.world.toggle_pause()
         elif name == 'menu':
             self.world = World()
+            self.menu_page = 'main'
+        elif name == 'settings':
+            self.menu_page = 'settings'
+        elif name == 'back':
+            self.menu_page = 'main'
         elif name == 'quit':
             self.running = False
         elif name == 'mute':
@@ -51,8 +62,11 @@ class Game:
                 world.toggle_pause()
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                world.toggle_pause()
-            elif event.key == pygame.K_RETURN and world.stage == 'menu':
+                if world.stage == 'menu':
+                    self.menu_page = 'main'
+                else:
+                    world.toggle_pause()
+            elif event.key == pygame.K_RETURN and world.stage == 'menu' and self.menu_page == 'main':
                 self.action('play')
             elif event.key == pygame.K_RETURN and world.stage == 'tutorial':
                 self.action('skip')
@@ -92,7 +106,7 @@ class Game:
         self.renderer.draw(self.canvas, self.world, mouse, self.time)
         # Nearest-neighbor scaling preserves the intentional pixel grid.
         pygame.transform.scale(self.canvas, WINDOW_SIZE, self.window)
-        self.renderer.draw_ui(self.window, self.world, mouse, self.time, self.audio)
+        self.renderer.draw_ui(self.window, self.world, mouse, self.time, self.audio, self.menu_page)
         pygame.display.flip()
 
     def run(self, smoke_test=False):

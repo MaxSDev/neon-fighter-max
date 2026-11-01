@@ -13,7 +13,7 @@ from neon.app import Game
 
 class AppTests(unittest.TestCase):
     def setUp(self):
-        self.game = Game()
+        self.game = Game(preferences_path=None)
         self.game.frame(1 / 60, [], pygame.Vector2(), (320, 150))
 
     def tearDown(self):
@@ -47,7 +47,7 @@ class AppTests(unittest.TestCase):
             self.game.frame(1 / 60, [], pygame.Vector2(), (320, 150))
         self.assertEqual(self.game.world.stage, 'defeat')
         self.key(pygame.K_r)
-        self.assertEqual(self.game.world.stage, 'tutorial')
+        self.assertEqual(self.game.world.stage, 'arena')
 
     def test_all_screens_and_finisher_render(self):
         for stage in ('menu', 'tutorial', 'arena', 'victory', 'defeat'):

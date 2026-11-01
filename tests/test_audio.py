@@ -11,7 +11,7 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
 import pygame
 
-from neon.audio import AUDIO_ROOT, AudioManager, EFFECT_NAMES, MUSIC_NAMES
+from neon.audio import AUDIO_ROOT, AudioManager, EFFECT_NAMES, MUSIC_NAMES, EFFECT_ALIASES
 from neon.world import World
 
 
@@ -30,7 +30,7 @@ class AudioTests(unittest.TestCase):
                     self.assertEqual(source.getsampwidth(), 2)
                     self.assertGreater(source.getnframes(), 1000)
                     self.assertTrue(any(source.readframes(source.getnframes())))
-        for name in EFFECT_NAMES:
+        for name in (*EFFECT_NAMES, *EFFECT_ALIASES):
             pygame.mixer.stop()
             self.assertTrue(manager.play(name), name)
 

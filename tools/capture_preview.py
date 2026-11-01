@@ -46,18 +46,21 @@ def capture_sequence(game, output):
 def main():
     output = Path(__file__).resolve().parents[1] / 'docs' / 'screenshots'
     output.mkdir(parents=True, exist_ok=True)
-    game = Game()
+    game = Game(preferences_path=None)
 
     def save(name):
         if game.world.stage not in ('boss_dying', 'player_dying'):
             game.world.scene_age = max(1, game.world.scene_age)
         game.renderer.draw(game.canvas, game.world, (345, 153), 2)
         pygame.transform.scale(game.canvas, (960, 540), game.window)
-        game.renderer.draw_ui(game.window, game.world, (345, 153), 2, game.audio)
+        game.renderer.draw_ui(game.window, game.world, (345, 153), 2, game.audio, game.menu_page)
         pygame.image.save(game.window, output / f'{name}.png')
 
     try:
         save('menu')
+        game.menu_page = 'settings'
+        save('settings')
+        game.menu_page = 'main'
         game.world.start()
         save('tutorial')
         for step in ('attack', 'combo', 'dodge', 'complete'):
@@ -66,6 +69,9 @@ def main():
                 game.world.tutorial.warning = 0.5
                 game.world.tutorial.aim = (game.world.player.pos + pygame.Vector2(0, -10) - game.world.tutorial.emitter).normalize()
             save(f'training-{step}')
+        game.world.practice_mode = True
+        game.world.tutorial.age = 2
+        save('practice-choice')
         game.world.skip_tutorial()
         game.world.wave = 2
         game.world.spawn_wave()
@@ -158,6 +164,34 @@ def main():
             while game.world.sequence_elapsed < age:
                 game.world.update(min(1 / 60, age - game.world.sequence_elapsed), pygame.Vector2())
             save(name)
+        game.world = World(seed=4)
+        game.world.stage = 'arena'
+        game.world.wave = 3
+        game.world.boss_announced = game.world.boss_spawned = True
+        boss = create_enemy(pygame.Vector2(320, 170), 'sentinel')
+        boss.hp = boss.max_hp // 2
+        game.world.enemies = [boss]
+        game.world.update(1 / 120, pygame.Vector2())
+        save('sentinel-overload')
+        for index, pattern in enumerate(('fan', 'area', 'radial', 'pressure')):
+            game.world = World(seed=4)
+            game.world.stage = 'arena'
+            game.world.wave = 3
+            game.world.player.pos.update(180, 165)
+            game.world.boss_announced = game.world.boss_spawned = True
+            boss = create_enemy(pygame.Vector2(210 if pattern == 'pressure' else 320, 165), 'sentinel')
+            boss.hp = boss.max_hp // 2
+            boss.phase = 2
+            boss.phase_announced = True
+            boss.pattern_index = index
+            boss.cooldown = 0
+            game.world.enemies = [boss]
+            game.world.update(1 / 120, pygame.Vector2())
+            save(f'sentinel-{pattern}')
+            if pattern == 'area':
+                for _ in range(140):
+                    game.world.update(1 / 120, pygame.Vector2())
+                save('sentinel-area-impact')
         game.world = World(seed=4)
         game.world.start()
         game.world.enemies.clear()

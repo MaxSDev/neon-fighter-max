@@ -12,7 +12,8 @@ from neon.combat import Enemy, Player
 from neon.settings import ARENA, OBSTACLES, BASE_SWORD_DAMAGE, COMBO_DAMAGE_MULTIPLIERS, CYAN, ORANGE, PURPLE, clamp_position
 from neon.balance import (ENEMIES, WAVES, MAX_ACTIVE_ENEMIES, SPAWN_INTERVAL, SPAWN_WARNING,
                           SPAWN_PLAYER_DISTANCE, WAVE_BREAK, WAVE_HEAL, BOSS_DESTRUCTION_TIME,
-                          BOSS_EXPLOSION_AT, PLAYER_DEFEAT_TIME, MAX_PROJECTILES)
+                          BOSS_EXPLOSION_AT, PLAYER_DEFEAT_TIME, MAX_PROJECTILES,
+                          RANGED_FIRE_GAP, OVERLOAD_MAX_PROJECTILES)
 from neon.weapon import sword_contact
 from neon.enemies import create_enemy
 from neon.tutorial import Tutorial
@@ -87,6 +88,10 @@ class World:
         self.sequence_elapsed = 0
         self.boss_exploded = False
         self.scene_age = 1
+        self.practice_mode = False
+        self.areas = []
+        self.ranged_fire_timer = 0
+        self.overload_particle_timer = 0
 
     def emit(self, event):
         self.audio_events.append(event)
@@ -105,8 +110,9 @@ class World:
     def playing(self):
         return self.stage in ('tutorial', 'arena')
 
-    def start(self):
+    def start(self, practice=False):
         self.__init__(self.seed)
+        self.practice_mode = practice
         self._set_stage('tutorial')
         self.enemies = [Enemy(Vector2(322, 154), kind='dummy', hp=999, max_hp=999, speed=0)]
 
@@ -116,6 +122,7 @@ class World:
         self._set_stage('arena')
         self.enemies.clear()
         self.projectiles.clear()
+        self.areas.clear()
         self.player = Player()
         self.intermission = 1.6
         self.attack_buffer = 0
@@ -222,6 +229,7 @@ class World:
                 self.attack_buffer = 0
                 self._set_stage('boss_dying')
                 self.projectiles.clear()
+                self.areas.clear()
                 self.spawn_queue.clear()
                 self.pending_spawn = None
                 self.burst(enemy.pos + Vector2(0, -18), ORANGE, 35)
@@ -276,6 +284,7 @@ class World:
         self.player.dash_left = 0
         self.attack_buffer = 0
         self.projectiles.clear()
+        self.areas.clear()
         self.emit('defeat')
         self.burst(self.player.pos + Vector2(0, -10), CYAN, 24)
 
@@ -347,6 +356,34 @@ class World:
         if any(enemy.kind == 'sentinel' and enemy.hp <= 0 for enemy in self.enemies):
             self._collect_dead()
             return
+        self.ranged_fire_timer = max(0, self.ranged_fire_timer - dt)
+        self.overload_particle_timer = max(0, self.overload_particle_timer - dt)
+        boss = next((enemy for enemy in self.enemies if enemy.kind == 'sentinel'), None)
+        if boss is not None:
+            boss.check_phase()
+            if boss.phase == 2 and not boss.phase_announced:
+                boss.phase_announced = True
+                self.projectiles.clear()
+                self.areas.clear()
+                self.emit('overload')
+                self.burst(boss.pos + Vector2(0, -18), PURPLE, 22)
+            if boss.phase == 2 and self.overload_particle_timer == 0:
+                self.overload_particle_timer = 0.15
+                self.burst(boss.pos + Vector2(0, -18), ORANGE, 2)
+        for area in self.areas:
+            if not area.resolved and boss is not None and boss.stun > 0:
+                continue
+            if area.update(dt, player):
+                self.emit('player_hurt')
+                self.burst(player.pos, ORANGE, 12)
+                self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{area.damage}', ORANGE))
+            if area.just_resolved:
+                self.emit('area_impact')
+                self.burst(area.pos, PURPLE, 12)
+        self.areas = [area for area in self.areas if area.alive]
+        if player.hp <= 0:
+            self._begin_player_defeat()
+            return
         for enemy in self.enemies:
             if enemy.kind == 'dummy':
                 enemy.flash = max(0, enemy.flash - dt)
@@ -354,15 +391,27 @@ class World:
             if enemy.hp <= 0:
                 continue
             was_preparing = enemy.windup > 0
-            if enemy.update(dt, player):
+            if enemy.kind == 'ranged':
+                hurt = enemy.update(dt, player, can_fire=self.ranged_fire_timer == 0)
+            elif enemy.kind == 'sentinel':
+                budget = min(MAX_PROJECTILES, OVERLOAD_MAX_PROJECTILES if enemy.phase == 2 else MAX_PROJECTILES)
+                hurt = enemy.update(dt, player, hazards_clear=not self.projectiles and not self.areas,
+                                    shot_budget=max(0, budget - len(self.projectiles)))
+                self.areas.extend(enemy.zones)
+                enemy.zones.clear()
+            else:
+                hurt = enemy.update(dt, player)
+            if hurt:
                 self.burst(player.pos, ORANGE, 18)
                 self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{enemy.stats.damage}', ORANGE))
                 self.shake = max(self.shake, 2)
                 self.emit('player_hurt')
             if enemy.kind == 'sentinel' and not was_preparing and enemy.windup > 0:
-                self.emit('boss_attack')
+                self.emit({'fan': 'boss_fan', 'radial': 'boss_radial', 'area': 'area_warning'}.get(enemy.attack_kind, 'boss_attack'))
             if enemy.shots:
                 self.emit('enemy_shot')
+                if enemy.kind == 'ranged':
+                    self.ranged_fire_timer = RANGED_FIRE_GAP
             self.projectiles.extend(enemy.shots[:max(0, MAX_PROJECTILES - len(self.projectiles))])
             enemy.shots.clear()
         for shot in self.projectiles:
@@ -399,7 +448,7 @@ class World:
                 self.emit('enemy_shot')
             if self.tutorial.step != previous_step:
                 self.emit('tutorial_step')
-            if self.tutorial.finished:
+            if self.tutorial.finished and not self.practice_mode:
                 self.skip_tutorial()
         elif self.stage == 'arena':
             self._advance_progression(dt)

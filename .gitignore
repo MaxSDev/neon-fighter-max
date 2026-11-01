@@ -18,3 +18,7 @@ dist/
 # Temporales
 *.log
 .DS_Store
+
+# Local audio preferences only (no gameplay progress)
+settings/audio.ini
+settings/audio.ini.tmp

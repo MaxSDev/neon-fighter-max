@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 
 import pygame
+from neon.preferences import load_audio_preferences, save_audio_preferences
 
 
 AUDIO_ROOT = Path(__file__).resolve().parents[1] / 'assets' / 'audio'
@@ -13,14 +14,18 @@ EFFECT_NAMES = (
     'boss_destroy', 'button', 'victory', 'defeat', 'tutorial_step', 'wave_start', 'player_hurt',
 )
 MUSIC_NAMES = ('menu', 'tutorial', 'arena', 'boss', 'victory', 'defeat')
+EFFECT_ALIASES = {'overload': 'boss_spawn', 'boss_fan': 'enemy_shot',
+                  'boss_radial': 'spark', 'area_warning': 'wave_start', 'area_impact': 'hit_heavy'}
 
 
 class AudioManager:
-    def __init__(self, root=AUDIO_ROOT):
+    def __init__(self, root=AUDIO_ROOT, preferences_path=None):
         self.root = Path(root)
-        self.music_volume = 0.30
-        self.effects_volume = 0.65
-        self.muted = False
+        self.preferences_path = preferences_path
+        preferences = load_audio_preferences(preferences_path)
+        self.music_volume = preferences['music_volume']
+        self.effects_volume = preferences['effects_volume']
+        self.muted = preferences['muted']
         self.enabled = False
         self.sounds = {}
         self.diagnostics = []
@@ -45,6 +50,9 @@ class AudioManager:
                 self.sounds[name] = pygame.mixer.Sound(str(self.root / 'sfx' / f'{name}.wav'))
             except (pygame.error, OSError) as error:
                 self.diagnostics.append(f'Missing/unreadable effect {name}: {error}')
+        for name, source in EFFECT_ALIASES.items():
+            if source in self.sounds:
+                self.sounds[name] = self.sounds[source]
 
     @staticmethod
     def scene_for(world):
@@ -60,7 +68,7 @@ class AudioManager:
         if not self.enabled or self.muted or name not in self.sounds:
             return False
         # Dense multi-target hits may share one short sample, never a frame loop.
-        minimum_gap = 0.045 if name in ('hit', 'hit_heavy', 'enemy_hurt', 'spark', 'enemy_shot', 'projectile_hit') else 0
+        minimum_gap = 0.045 if name in ('hit', 'hit_heavy', 'enemy_hurt', 'spark', 'enemy_shot', 'projectile_hit', 'area_impact') else 0
         if self.clock - self.last_played.get(name, -100) < minimum_gap:
             return False
         sound = self.sounds[name]
@@ -78,6 +86,13 @@ class AudioManager:
     def adjust(self, category, delta):
         attr = 'music_volume' if category == 'music' else 'effects_volume'
         setattr(self, attr, max(0, min(1, getattr(self, attr) + delta)))
+        self.save_preferences()
+
+    def save_preferences(self):
+        if not save_audio_preferences(self.preferences_path, self.music_volume, self.effects_volume, self.muted):
+            message = 'Audio preferences could not be saved; session values remain active.'
+            if message not in self.diagnostics:
+                self.diagnostics.append(message)
 
     def update(self, dt, world):
         dt = min(max(dt, 0), 0.25)
@@ -114,6 +129,7 @@ class AudioManager:
 
     def toggle_mute(self):
         self.muted = not self.muted
+        self.save_preferences()
         if self.enabled and self.muted:
             pygame.mixer.stop()
             pygame.mixer.music.set_volume(0)

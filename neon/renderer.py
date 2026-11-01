@@ -7,8 +7,9 @@ import pygame
 from neon.art import glow, make_background, make_robot, sword_polygon
 from neon.settings import CYAN, INK, MUTED, ORANGE, PURPLE, WHITE
 from neon.weapon import sword_pose
-from neon.balance import (ENEMIES, BOSS_ENERGY_SPREAD, BOSS_DESTRUCTION_TIME, BOSS_EXPLOSION_AT,
-                          PLAYER_DEFEAT_TIME, ENDING_FADE_TIME, SPAWN_WARNING, WAVES)
+from neon.balance import (ENEMIES, BOSS_DESTRUCTION_TIME, BOSS_EXPLOSION_AT,
+                          PLAYER_DEFEAT_TIME, ENDING_FADE_TIME, SPAWN_WARNING, WAVES, OVERLOAD_NOTICE_TIME)
+from neon.boss_patterns import projectile_angles
 
 
 class Renderer:
@@ -51,6 +52,7 @@ class Renderer:
     def draw(self, target, world, mouse, time):
         self.scene.blit(self.background, (0, 0))
         self._ambient(self.scene, time)
+        self._areas(self.scene, world)
         self._spawn_warning(self.scene, world, time)
         actors = [(enemy.pos.y, enemy, enemy.kind) for enemy in world.enemies]
         if world.stage == 'tutorial' and world.tutorial.step == 'movement':
@@ -83,6 +85,10 @@ class Renderer:
         self._impacts(self.scene, world)
         target.fill(INK)
         target.blit(self.scene, offset)
+        boss = next((enemy for enemy in world.enemies if enemy.kind == 'sentinel'), None)
+        if boss is not None and boss.phase_notice > 0:
+            self.effects.fill((155, 45, 115, round(24 * boss.phase_notice / OVERLOAD_NOTICE_TIME)))
+            target.blit(self.effects, (0, 0))
         if world.impact > 0:
             self.effects.fill((143, 99, 228, round(30 * world.impact / 0.065)))
             target.blit(self.effects, (0, 0))
@@ -95,7 +101,7 @@ class Renderer:
             self.effects.fill((5, 10, 22, round(140 * (1 - world.scene_age / 0.3))))
             target.blit(self.effects, (0, 0))
 
-    def draw_ui(self, target, world, mouse, time, audio=None):
+    def draw_ui(self, target, world, mouse, time, audio=None, menu_page='main'):
         """Draw crisp text after integer scaling; coordinates stay in world units."""
         self.buttons.clear()
         offset = pygame.Vector2(self.camera_offset)
@@ -107,15 +113,21 @@ class Renderer:
             elif enemy.windup > 0:
                 self.text(target, '!', enemy.pos + offset + (0, -55 if enemy.kind == 'sentinel' else -34), ORANGE, 18, True)
         if world.stage == 'menu':
-            self._menu(target, mouse, time)
+            if menu_page == 'settings' and audio is not None:
+                self._settings(target, mouse, audio)
+            else:
+                self._menu(target, mouse, time)
         else:
             self._hud(target, world)
             boss = next((enemy for enemy in world.enemies if enemy.kind == 'sentinel'), None)
             if boss is not None:
                 self.ui_rect(target, INK, (110, 32, 260, 25))
-                self.text(target, 'SENTINEL-X', (240, 39), ORANGE, 14, True)
+                self.text(target, f'SENTINEL-X  /  FASE {boss.phase}', (240, 39), ORANGE, 14, True)
                 self.ui_rect(target, (56, 33, 45), (118, 49, 244, 5))
                 self.ui_rect(target, ORANGE, (118, 49, round(244 * boss.hp / boss.max_hp), 5))
+                if boss.phase_notice > 0:
+                    self.ui_rect(target, INK, (131, 65, 218, 20))
+                    self.text(target, 'SOBRECARGA DETECTADA', (240, 75), PURPLE, 18, True)
             if world.paused:
                 self._overlay(target, 'SISTEMA EN PAUSA', 'Respira. La arena puede esperar.')
                 self.button(target, 'resume', 'CONTINUAR  /  ESC', (156, 151, 168, 28), mouse, True)
@@ -148,8 +160,6 @@ class Renderer:
                     self.text(target, f'HOSTILES RESTANTES: {remaining}', (240, 45), MUTED, 12, True)
                 if world.playing:
                     self._crosshair(target, mouse)
-        if world.stage == 'menu' and audio is not None:
-            self._audio_controls(target, mouse, audio)
         if not world.playing or world.paused:
             x, y = mouse
             pygame.draw.polygon(target, INK, [(2*x - 2, 2*y - 2), (2*x + 16, 2*y + 12), (2*x + 8, 2*y + 14), (2*x + 2, 2*y + 22)])
@@ -173,20 +183,29 @@ class Renderer:
                 pos = actor.pos - actor.dash_direction * index * 7
                 pygame.draw.ellipse(target, (25, 66, 82), (pos.x - 7, pos.y - 10, 14, 10), 1)
         if not player and actor.windup > 0:
-            if getattr(actor, 'attack_kind', 'melee') == 'energy':
+            attack_kind = getattr(actor, 'attack_kind', 'melee')
+            if attack_kind in ('energy', 'fan', 'radial'):
                 origin = actor.pos + pygame.Vector2(0, -18 if kind == 'sentinel' else -10)
-                for angle in BOSS_ENERGY_SPREAD if kind == 'sentinel' else (0,):
+                for angle in projectile_angles(attack_kind) if kind == 'sentinel' else (0,):
                     direction = actor.locked_aim.rotate(angle)
-                    for distance in range(22, 230, 12):
+                    for distance in range(22, 150 if attack_kind == 'radial' else 230, 12):
                         point = origin + direction * distance
                         if 24 <= point.x <= 456 and 62 <= point.y <= 244:
                             pygame.draw.line(target, (183, 80, 91), point, point + direction * 5)
                 pygame.draw.circle(target, ORANGE, origin + actor.locked_aim * (20 if kind == 'sentinel' else 12),
                                    4 + int(actor.age * 14) % 3, 1)
-            else:
+                if attack_kind == 'radial':
+                    # Show the same open escape wedge omitted from the actual volley.
+                    safe = (175, 226, 134)
+                    for angle in (-45, 45):
+                        direction = actor.locked_aim.rotate(angle)
+                        pygame.draw.line(target, safe, origin + direction * 24, origin + direction * 65)
+                    pygame.draw.line(target, safe, origin + actor.locked_aim * 30, origin + actor.locked_aim * 65, 2)
+            elif attack_kind != 'area':
                 radius = round(actor.stats.reach)
                 pygame.draw.circle(target, ORANGE, (x, y), radius, 1)
-                pygame.draw.circle(target, (130, 70, 50), (x, y), max(3, int(radius * actor.windup / actor.stats.windup)), 1)
+                duration = actor.windup_duration if kind == 'sentinel' else actor.stats.windup
+                pygame.draw.circle(target, (130, 70, 50), (x, y), max(3, int(radius * actor.windup / duration)), 1)
         age = actor.walk_time if player else actor.age * 8
         moving = actor.moving if player else kind != 'dummy' and actor.windup == 0 and actor.stun == 0 and getattr(actor, 'recovery', 0) == 0
         frame = (1 if math.sin(age) > 0 else -1) if moving else 0
@@ -196,6 +215,14 @@ class Renderer:
         if kind == 'sentinel' and actor.recovery > 0:
             bob = 2
         target.blit(sprite, (x - sprite.get_width() // 2, y - (48 if kind == 'sentinel' else 24) + bob))
+        if kind == 'sentinel' and actor.phase == 2:
+            pulse = 1 + math.sin(actor.age * 14)
+            self.effects.fill((0, 0, 0, 0))
+            pygame.draw.circle(self.effects, (255, 56, 135, 65), (x, y - 21), round(14 + pulse * 2))
+            target.blit(self.effects, (0, 0))
+            pygame.draw.circle(target, (255, 95, 122), (x, y - 21), 7)
+            pygame.draw.circle(target, ORANGE, (x, y - 21), 5)
+            pygame.draw.circle(target, (255, 242, 193), (x, y - 21), 2 + round(pulse))
         if kind == 'sentinel' and actor.recovery > 0:
             pygame.draw.circle(target, (117, 67, 52), (x, y - 20), 9, 1)
             pygame.draw.line(target, ORANGE, (x - 4, y - 20), (x + 4, y - 20))
@@ -213,6 +240,21 @@ class Renderer:
         pygame.draw.circle(target, PURPLE, ticket.pos, radius, 1)
         pygame.draw.circle(target, (91, 64, 131), ticket.pos, max(2, round(radius * ticket.left / SPAWN_WARNING)), 1)
         pygame.draw.line(target, PURPLE, ticket.pos + (-4, 0), ticket.pos + (4, 0))
+
+    def _areas(self, target, world):
+        self.effects.fill((0, 0, 0, 0))
+        for area in world.areas:
+            if not area.resolved:
+                pygame.draw.circle(self.effects, (*PURPLE, 35), area.pos, round(area.radius))
+                pygame.draw.circle(self.effects, (*PURPLE, 220), area.pos, round(area.radius), 1)
+                pygame.draw.circle(self.effects, (*ORANGE, 200), area.pos,
+                                   max(2, round(area.radius * min(1, area.warning / 1.1))), 1)
+                pygame.draw.line(self.effects, (*ORANGE, 220), area.pos + (-4, 0), area.pos + (4, 0))
+                pygame.draw.line(self.effects, (*ORANGE, 220), area.pos + (0, -4), area.pos + (0, 4))
+            else:
+                pygame.draw.circle(self.effects, (*ORANGE, round(190 * area.flash_left / 0.25)),
+                                   area.pos, round(area.radius))
+        target.blit(self.effects, (0, 0))
 
     def _boss_destruction(self, target, world, time):
         pos = world.boss_death_pos
@@ -266,8 +308,25 @@ class Renderer:
                 'combo': f'Cadena conectada: {tutorial.chain}/4',
                 'dodge': f'Evita un disparo · Dashes de práctica: {min(2, tutorial.dashes)}/2',
                 'complete': 'Accediendo a la arena...'}[tutorial.step]
+        if world.practice_mode and tutorial.finished:
+            hint = 'Elige continuar a la arena o volver al menú'
         self.ui_rect(target, INK, (50, 233, 380, 17))
         self.text(target, hint, (240, 241), MUTED, 14, True)
+        if world.practice_mode and tutorial.finished:
+            self.button(target, 'continue', 'CONTINUAR A ARENA', (100, 184, 140, 26), mouse, True)
+            self.button(target, 'menu', 'VOLVER AL MENÚ', (250, 184, 130, 26), mouse)
+
+    def _settings(self, target, mouse, audio):
+        subtitle = 'Preferencias de audio · M para silenciar' if audio.enabled else 'Dispositivo de audio no disponible'
+        self._overlay(target, 'AJUSTES', subtitle)
+        for index, (category, label, value) in enumerate((('music', 'MÚSICA', audio.music_volume),
+                                                          ('effects', 'EFECTOS', audio.effects_volume))):
+            y = 142 + index * 29
+            self.text(target, f'{label}   {round(value * 100)}%', (138, y + 5), WHITE, 16)
+            self.button(target, f'{category}_down', '-', (274, y, 27, 23), mouse)
+            self.button(target, f'{category}_up', '+', (311, y, 27, 23), mouse)
+        self.button(target, 'mute', 'REACTIVAR AUDIO' if audio.muted else 'SILENCIAR AUDIO', (150, 202, 180, 23), mouse)
+        self.button(target, 'back', 'VOLVER', (185, 234, 110, 23), mouse, True)
 
     def _audio_controls(self, target, mouse, audio):
         self.ui_rect(target, INK, (8, 185, 128, 63))
@@ -361,9 +420,10 @@ class Renderer:
         self.text(target, 'M A X', (240, 117), CYAN, 42, True)
         self.ui_line(target, PURPLE, (190, 140), (290, 140))
         self.text(target, 'DESPIERTA. LUCHA. SOBREVIVE.', (240, 155), MUTED, 14, True)
-        self.button(target, 'play', 'INICIAR PROTOCOLO  >', (143, 178, 194, 30), mouse, True)
-        self.button(target, 'training', 'ENTRENAMIENTO', (145, 217, 125, 22), mouse)
-        self.button(target, 'quit', 'SALIR', (280, 217, 65, 22), mouse)
+        self.button(target, 'play', 'INICIAR PROTOCOLO  >', (143, 173, 194, 27), mouse, True)
+        self.button(target, 'training', 'ENTRENAMIENTO', (112, 208, 132, 23), mouse)
+        self.button(target, 'settings', 'AJUSTES', (254, 208, 114, 23), mouse)
+        self.button(target, 'quit', 'SALIR', (191, 238, 98, 19), mouse)
         self.text(target, 'ENTER para jugar   ·   Pixel art original / sin conexión', (240, 258), MUTED, 12, True)
 
     def _crosshair(self, target, mouse):
