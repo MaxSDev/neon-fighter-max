@@ -7,6 +7,7 @@ from pygame import Vector2
 
 from neon.settings import clamp_position
 from neon.weapon import attack_timing, sword_pose
+from neon.balance import ENEMIES
 
 
 @dataclass
@@ -108,24 +109,40 @@ class Enemy:
     windup: float = 0
     age: float = 0
     facing: Vector2 = field(default_factory=lambda: Vector2(-1, 0))
+    shots: list = field(default_factory=list)
+
+    @property
+    def stats(self):
+        return ENEMIES[self.kind]
+
+    @property
+    def radius(self):
+        return self.stats.radius
 
     def hit(self, damage, direction, finisher=False):
         self.hp = max(0, self.hp - damage)
-        self.velocity = direction * (240 if finisher else 130)
-        self.stun = 0.3 if finisher else 0.18
+        armor = 0.2 if self.kind == 'sentinel' else 1
+        self.velocity = direction * (240 if finisher else 130) * armor
+        self.stun = (0.3 if finisher else 0.18) * armor
         self.flash = 0.12
-        self.windup = 0
-        self.cooldown = max(self.cooldown, 0.5)
+        if self.kind != 'sentinel':
+            self.windup = 0
+            self.cooldown = max(self.cooldown, 0.5)
 
-    def update(self, dt, player):
+    def advance_reaction(self, dt):
         self.age += dt
         self.flash = max(0, self.flash - dt)
         self.cooldown = max(0, self.cooldown - dt)
         self.pos += self.velocity * (1 - math.exp(-12 * dt)) / 12
         self.velocity *= math.exp(-12 * dt)
-        clamp_position(self.pos)
+        clamp_position(self.pos, self.radius)
         if self.stun > 0:
             self.stun = max(0, self.stun - dt)
+            return True
+        return False
+
+    def update(self, dt, player):
+        if self.advance_reaction(dt):
             return False
         offset = player.pos - self.pos
         distance = offset.length()
@@ -134,10 +151,10 @@ class Enemy:
         if self.windup > 0:
             self.windup = max(0, self.windup - dt)
             if self.windup == 0:
-                self.cooldown = 1.05
-                return distance <= 28 and player.hurt(18 if self.kind == 'brute' else 12)
-        elif distance < 23 and self.cooldown == 0:
-            self.windup = 0.42
+                self.cooldown = self.stats.cooldown
+                return distance <= self.stats.reach and player.hurt(self.stats.damage)
+        elif distance < self.stats.trigger and self.cooldown == 0:
+            self.windup = self.stats.windup
         elif distance > 18:
             self.pos += self.facing * min(self.speed * dt, distance - 18)
             clamp_position(self.pos)

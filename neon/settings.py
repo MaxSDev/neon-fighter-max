@@ -14,6 +14,8 @@ ORANGE = (255, 154, 87)
 WHITE = (222, 240, 245)
 MUTED = (111, 143, 163)
 INK = (9, 15, 27)
+DECORATIONS = ((44, 68), (400, 68), (43, 221), (410, 220))
+OBSTACLES = tuple(pygame.Rect(x, y, 27, 16) for x, y in DECORATIONS)
 
 
 def clamp_position(pos, radius=8):

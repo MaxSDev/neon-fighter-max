@@ -1,14 +1,19 @@
 """Game progression and combat orchestration; no window or asset loading."""
 
 from dataclasses import dataclass
+from collections import deque
 import math
 import random
+import pygame
 
 from pygame import Vector2
 
 from neon.combat import Enemy, Player
-from neon.settings import BASE_SWORD_DAMAGE, COMBO_DAMAGE_MULTIPLIERS, CYAN, ORANGE, PURPLE, clamp_position
+from neon.settings import ARENA, OBSTACLES, BASE_SWORD_DAMAGE, COMBO_DAMAGE_MULTIPLIERS, CYAN, ORANGE, PURPLE, clamp_position
+from neon.balance import (ENEMIES, WAVES, MAX_ACTIVE_ENEMIES, SPAWN_INTERVAL, SPAWN_WARNING,
+                          SPAWN_PLAYER_DISTANCE, WAVE_BREAK, WAVE_HEAL, BOSS_DESTRUCTION_TIME, MAX_PROJECTILES)
 from neon.weapon import sword_contact
+from neon.enemies import create_enemy
 
 
 @dataclass
@@ -37,6 +42,13 @@ class Impact:
     life: float = 0.18
 
 
+@dataclass
+class SpawnTicket:
+    kind: str
+    pos: Vector2
+    left: float = SPAWN_WARNING
+
+
 class World:
     def __init__(self, seed=None):
         self.seed = seed
@@ -57,6 +69,17 @@ class World:
         self.impact = 0
         self.shake = 0
         self.attack_buffer = 0
+        self.spawn_queue = deque()
+        self.pending_spawn = None
+        self.spawn_timer = 0
+        self.spawn_history = []
+        self.projectiles = []
+        self.boss_announced = False
+        self.boss_spawned = False
+        self.boss_defeated = False
+        self.boss_destruction = 0
+        self.boss_death_pos = None
+        self.destruction_tick = 0
 
     @property
     def playing(self):
@@ -104,18 +127,97 @@ class World:
         self.particles = self.particles[-220:]
 
     def spawn_wave(self):
+        if self.wave >= len(WAVES):
+            return
         self.wave += 1
-        for index in range(2 + self.wave * 2):
-            # Entry points alternate around the perimeter, away from the player.
-            angle = index * 2.399 + self.wave
-            pos = Vector2(240 + math.cos(angle) * 204, 154 + math.sin(angle) * 78)
-            if pos.distance_to(self.player.pos) < 85:
-                pos = Vector2(480 - self.player.pos.x, 90 if self.player.pos.y > 154 else 230)
-            brute = self.wave >= 2 and index % 3 == 0
-            hp = 100 if brute else 52 + self.wave * 6
-            enemy = Enemy(pos, 'brute' if brute else 'drone', hp, hp, 30 if brute else 34 + self.wave * 5)
-            self.enemies.append(enemy)
-            self.burst(pos, PURPLE, 12)
+        self.spawn_queue.extend(WAVES[self.wave - 1])
+        self.intermission = 0
+        self.spawn_timer = 0
+
+    @staticmethod
+    def spawn_bounds_valid(pos, kind):
+        half_width = 24 if kind == 'sentinel' else 12
+        height = 48 if kind == 'sentinel' else 24
+        body = pygame.Rect(round(pos.x - half_width), round(pos.y - height), half_width * 2, height + 4)
+        return ARENA.contains(body) and not any(body.colliderect(rect) for rect in OBSTACLES)
+
+    def spawn_position_valid(self, pos, kind):
+        distance = 120 if kind == 'sentinel' else SPAWN_PLAYER_DISTANCE
+        return (self.spawn_bounds_valid(pos, kind)
+                and pos.distance_to(self.player.pos) >= distance
+                and all(pos.distance_to(e.pos) > ENEMIES[kind].radius + e.radius + 12 for e in self.enemies))
+
+    def find_spawn_position(self, kind):
+        candidates = [Vector2(x, y) for x in range(48, 442, 32) for y in range(96, 237, 28)]
+        self.rng.shuffle(candidates)
+        return next((pos for pos in candidates if self.spawn_position_valid(pos, kind)), None)
+
+    def _update_spawns(self, dt):
+        self.spawn_timer = max(0, self.spawn_timer - dt)
+        if self.pending_spawn is not None:
+            ticket = self.pending_spawn
+            ticket.left = max(0, ticket.left - dt)
+            if ticket.left == 0:
+                # Revalidate after the warning: the player may have moved into it.
+                if not self.spawn_position_valid(ticket.pos, ticket.kind):
+                    self.pending_spawn = None
+                    self.spawn_timer = 0.1
+                    return
+                enemy = create_enemy(ticket.pos, ticket.kind)
+                self.enemies.append(enemy)
+                self.spawn_queue.popleft()
+                self.spawn_history.append((self.elapsed, ticket.kind, ticket.pos.copy()))
+                self.boss_spawned |= ticket.kind == 'sentinel'
+                self.burst(ticket.pos, PURPLE, 12)
+                self.pending_spawn = None
+                self.spawn_timer = SPAWN_INTERVAL
+        elif self.spawn_queue and self.spawn_timer == 0 and len(self.enemies) < MAX_ACTIVE_ENEMIES:
+            kind = self.spawn_queue[0]
+            pos = self.find_spawn_position(kind)
+            if pos is not None:
+                self.pending_spawn = SpawnTicket(kind, pos)
+
+    def _collect_dead(self):
+        for enemy in self.enemies:
+            if enemy.hp > 0:
+                continue
+            self.kills += 1
+            self.burst(enemy.pos, ORANGE, 16)
+            if enemy.kind == 'sentinel':
+                self.boss_defeated = True
+                self.boss_destruction = BOSS_DESTRUCTION_TIME
+                self.boss_death_pos = enemy.pos.copy()
+                self.projectiles.clear()
+                self.burst(enemy.pos + Vector2(0, -18), ORANGE, 35)
+        self.enemies = [enemy for enemy in self.enemies if enemy.hp > 0]
+
+    def _advance_progression(self, dt):
+        if self.boss_defeated:
+            self.boss_destruction = max(0, self.boss_destruction - dt)
+            self.destruction_tick += dt
+            if self.destruction_tick >= 0.12:
+                self.destruction_tick = 0
+                self.burst(self.boss_death_pos + Vector2(0, -18), ORANGE, 8)
+            if self.boss_destruction == 0:
+                self.stage = 'victory'
+            return
+        if self.enemies or self.spawn_queue or self.pending_spawn:
+            self._update_spawns(dt)
+            return
+        if self.intermission > 0:
+            self.intermission = max(0, self.intermission - dt)
+            if self.intermission == 0:
+                if self.boss_announced:
+                    self.spawn_queue.append('sentinel')
+                    self.spawn_timer = 0
+                else:
+                    self.spawn_wave()
+        else:
+            self.intermission = WAVE_BREAK
+            self.player.hp = min(100, self.player.hp + WAVE_HEAL)
+            self.projectiles.clear()
+            if self.wave == len(WAVES):
+                self.boss_announced = True
 
     def update(self, dt, movement, aim=None):
         if self.paused:
@@ -180,34 +282,35 @@ class World:
                 continue
             if enemy.update(dt, player):
                 self.burst(player.pos, ORANGE, 18)
-                self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), '-18' if enemy.kind == 'brute' else '-12', ORANGE))
+                self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{enemy.stats.damage}', ORANGE))
                 self.shake = max(self.shake, 2)
+            self.projectiles.extend(enemy.shots[:max(0, MAX_PROJECTILES - len(self.projectiles))])
+            enemy.shots.clear()
+        for shot in self.projectiles:
+            if shot.update(dt, player, player.previous_pos):
+                self.burst(player.pos + Vector2(0, -10), ORANGE, 12)
+                self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{shot.damage}', ORANGE))
+                self.shake = max(self.shake, 1.5)
+        self.projectiles = [shot for shot in self.projectiles if shot.alive]
         # Soft body separation avoids enemies collapsing into one unreadable sprite.
         for index, first in enumerate(self.enemies):
             for second in self.enemies[index + 1:]:
                 delta = second.pos - first.pos
                 distance = delta.length()
-                if 0 < distance < 16:
-                    push = delta / distance * (16 - distance) * min(0.5, dt * 8)
+                spacing = first.radius + second.radius
+                if 0 < distance < spacing:
+                    push = delta / distance * (spacing - distance) * min(0.5, dt * 8)
                     first.pos -= push
                     second.pos += push
-                    clamp_position(first.pos)
-                    clamp_position(second.pos)
-        self.enemies = [e for e in self.enemies if e.hp > 0]
+                    clamp_position(first.pos, first.radius)
+                    clamp_position(second.pos, second.radius)
+        self._collect_dead()
         if player.hp <= 0:
             self.stage = 'defeat'
         elif self.stage == 'tutorial' and self.tutorial_hits >= 4:
             self.skip_tutorial()
-        elif self.stage == 'arena' and not self.enemies:
-            if self.wave == 3:
-                self.stage = 'victory'
-            elif self.intermission > 0:
-                self.intermission = max(0, self.intermission - dt)
-                if self.intermission == 0:
-                    self.spawn_wave()
-            else:
-                self.intermission = 2
-                player.hp = min(100, player.hp + 15)
+        elif self.stage == 'arena':
+            self._advance_progression(dt)
 
     def _resolve_strike(self):
         player = self.player
@@ -215,7 +318,7 @@ class World:
         for enemy in self.enemies:
             if enemy.hp <= 0 or enemy in player.hit_ids:
                 continue
-            contact = sword_contact(player, enemy.pos + Vector2(0, -10), 9)
+            contact = sword_contact(player, enemy.pos + Vector2(0, -18 if enemy.kind == 'sentinel' else -10), enemy.radius)
             if contact is None:
                 continue
             player.hit_ids.add(enemy)
@@ -233,6 +336,3 @@ class World:
                 self.impact = 0.065
             if self.stage == 'tutorial':
                 self.tutorial_hits += 1
-            if enemy.hp == 0:
-                self.kills += 1
-                self.burst(enemy.pos, ORANGE, 16)

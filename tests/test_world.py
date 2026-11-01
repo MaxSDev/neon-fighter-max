@@ -37,23 +37,23 @@ class WorldTests(unittest.TestCase):
         world.update(0.06, Vector2())
         self.assertEqual(dummy.hp, hp)
 
-    def test_skip_waves_victory_and_restart(self):
+    def test_skip_staggered_wave_and_restart_clears_progress(self):
         world = World()
         world.start()
         world.skip_tutorial()
-        for wave in (1, 2, 3):
-            for _ in range(150):
-                world.update(1 / 60, Vector2())
-            self.assertEqual(world.wave, wave)
-            self.assertTrue(world.enemies)
-            for enemy in world.enemies:
-                enemy.hp = 0
+        for _ in range(200):
             world.update(1 / 60, Vector2())
-        self.assertEqual(world.stage, 'victory')
+        self.assertEqual(world.wave, 1)
+        self.assertTrue(world.enemies)
+        self.assertTrue(world.spawn_queue)
         world.start()
         self.assertEqual(world.stage, 'tutorial')
         self.assertEqual(world.player.hp, 100)
         self.assertEqual(world.wave, 0)
+        self.assertFalse(world.spawn_queue)
+        self.assertIsNone(world.pending_spawn)
+        self.assertFalse(world.projectiles)
+        self.assertFalse(world.boss_spawned)
 
     def test_pause_freezes_simulation_and_defeat_is_terminal(self):
         world = World()
@@ -104,7 +104,8 @@ class WorldTests(unittest.TestCase):
             if not world.playing:
                 break
         self.assertEqual(world.stage, 'victory')
-        self.assertEqual(world.kills, 18)
+        self.assertEqual(world.kills, 23)
+        self.assertTrue(world.boss_defeated)
         self.assertEqual(world.tutorial_hits, 4)
 
     def test_enemy_attacks_can_cause_defeat_without_injected_damage(self):

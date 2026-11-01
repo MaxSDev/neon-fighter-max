@@ -1,4 +1,46 @@
-# Current validation: combat polish
+# Current validation: iteration three
+
+Validated on 2026-10-31 with the existing Python 3.12.6 / pygame-ce 2.5.8
+environment on Windows. No packages were installed or upgraded.
+
+| Check | Result | Boundary |
+| --- | --- | --- |
+| unittest suite | PASS: 44 tests | Existing sword/control regressions plus progression, new AI and projectile checks |
+| Syntax compilation | PASS | `main.py`, `neon`, `tests`, `tools` |
+| Entry-point smoke test | PASS: 120 frames | SDL dummy driver; no native manual play or sustained FPS claim |
+| Preview generation | PASS: 15 PNG fixtures | Includes ranged warning/shot, boss attacks/destruction and spawn warning |
+
+Tests establish the requested 5 / 7 / 10 enemy compositions, a maximum of five
+active enemies, staggered warnings, valid spawn bounds and prop exclusion,
+revalidation if the player enters a warning, pause of warnings/projectiles,
+queue-aware progression and victory only after boss destruction. The full-run
+controller completes the tutorial, defeats all 22 regular enemies and Sentinel-X
+using real sword damage, movement and legal dodges with normal player stats.
+The scripted progression test separately injects zero HP to isolate lifecycle
+transitions; it does not prove combat balance.
+
+New AI checks cover faster melee cadence, ranged retreat and locked shot aim,
+swept projectile contact, one-time consumption even during dash invulnerability,
+expiry and valid bounds, announced boss melee/energy, recovery, dodge avoidance
+and rendering of the boss health bar. Sword phase/contact, combo, hitstop,
+native UI, victory/defeat and restart regressions remain passing.
+
+An explicit red test reproduced a shot incorrectly considering player movement
+after its lifetime expired (player HP 90 instead of 100). Collision now clips
+relative player motion to the projectile's remaining lifetime; the regression
+passes. Two earlier MVP tests were adapted because their assumptions changed:
+18 kills became 23, and killing a visible batch no longer empties a wave queue.
+
+Static images inspected for this iteration: mixed arena, ranged preparation,
+visible energy projectile, Sentinel-X energy/melee warnings and destruction,
+plus spawn warning, finisher, victory and defeat. These are staged fixtures,
+not a human play session. Prior sword sequence checks also remain automated.
+
+Native Windows input/game feel, difficulty assessment, sustained 60 FPS and
+Linux execution remain pending. Reproduction commands are unchanged below;
+manual steps and current tuning are in [ITERATION_3.md](ITERATION_3.md).
+
+# Historical validation: combat polish
 
 Validation date: 2026-10-31. Same Windows/Python/pygame environment as below.
 

@@ -5,7 +5,7 @@ import random
 
 import pygame
 
-from neon.settings import CYAN, INK, ORANGE, PURPLE
+from neon.settings import CYAN, INK, ORANGE, PURPLE, DECORATIONS
 
 
 def glow(surface, center, color, radius):
@@ -47,7 +47,7 @@ def make_background():
     for x in range(34, 448, 12):
         color = (105, 80, 48) if (x // 12) % 2 else (35, 43, 52)
         pygame.draw.polygon(surface, color, [(x, 246), (x + 5, 246), (x + 1, 251), (x - 4, 251)])
-    for x, y in ((44, 68), (400, 68), (43, 221), (410, 220)):
+    for x, y in DECORATIONS:
         pygame.draw.rect(surface, (8, 17, 28), (x + 2, y + 4, 25, 12))
         pygame.draw.rect(surface, (42, 55, 72), (x, y, 25, 12))
         pygame.draw.rect(surface, (66, 76, 95), (x + 1, y, 23, 2))
@@ -101,6 +101,9 @@ def make_robot(kind, frame=0, flipped=False, flash=False):
         'drone': {'a': (20, 15, 30), 'b': (96, 58, 91), 'c': (160, 100, 129), 'd': (49, 31, 57), 'e': ORANGE},
         'brute': {'a': (22, 16, 28), 'b': (115, 72, 64), 'c': (185, 128, 94), 'd': (58, 39, 46), 'e': ORANGE},
         'dummy': {'a': (15, 23, 36), 'b': (77, 72, 113), 'c': (136, 129, 173), 'd': (40, 37, 65), 'e': PURPLE},
+        'fast': {'a': (14, 28, 25), 'b': (49, 91, 66), 'c': (114, 163, 94), 'd': (24, 49, 41), 'e': (194, 255, 119)},
+        'ranged': {'a': (27, 17, 38), 'b': (103, 48, 115), 'c': (180, 99, 178), 'd': (54, 28, 72), 'e': (255, 109, 179)},
+        'sentinel': {'a': (13, 16, 24), 'b': (43, 49, 62), 'c': (93, 102, 119), 'd': (26, 29, 40), 'e': (255, 70, 69)},
     }[kind]
     sprite = pygame.Surface((24, 28), pygame.SRCALPHA)
     for y, row in enumerate(ROBOT):
@@ -118,6 +121,24 @@ def make_robot(kind, frame=0, flipped=False, flash=False):
     if kind == 'brute':
         pygame.draw.rect(sprite, colors['c'], (2, 10, 4, 5))
         pygame.draw.rect(sprite, colors['c'], (18, 10, 4, 5))
+    if kind == 'fast':
+        pygame.draw.line(sprite, colors['e'], (2, 10), (0, 5), 2)
+        pygame.draw.line(sprite, colors['e'], (20, 13), (23, 18), 2)
+    if kind == 'ranged':
+        pygame.draw.rect(sprite, colors['a'], (16, 10, 8, 6))
+        pygame.draw.rect(sprite, colors['c'], (17, 11, 6, 3))
+        pygame.draw.rect(sprite, ORANGE, (22, 11, 2, 3))
+        pygame.draw.line(sprite, colors['c'], (7, 4), (7, 0))
+    if kind == 'sentinel':
+        sprite = pygame.transform.scale(sprite, (48, 56))
+        armor = (235, 252, 255) if flash else (58, 65, 79)
+        pygame.draw.rect(sprite, armor, (2, 18, 10, 12))
+        pygame.draw.rect(sprite, armor, (36, 18, 10, 12))
+        pygame.draw.rect(sprite, (255, 70, 69), (4, 20, 6, 2))
+        pygame.draw.rect(sprite, (255, 70, 69), (38, 20, 6, 2))
+        pygame.draw.circle(sprite, (119, 44, 39), (24, 27), 6)
+        pygame.draw.circle(sprite, ORANGE, (24, 27), 4)
+        pygame.draw.rect(sprite, (255, 231, 160), (23, 25, 2, 3))
     return pygame.transform.flip(sprite, flipped, False)
 
 

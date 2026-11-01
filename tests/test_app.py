@@ -101,6 +101,21 @@ class AppTests(unittest.TestCase):
         # This pixel was on the old hardcoded diagonal, unrelated to contact.
         self.assertNotEqual(self.game.canvas.get_at((200, 173))[:3], WHITE)
 
+    def test_new_enemies_telegraphs_and_boss_health_bar_render(self):
+        from neon.enemies import create_enemy
+        from neon.settings import ORANGE
+
+        world = self.game.world
+        world.stage = 'arena'
+        world.enemies = [create_enemy(pygame.Vector2(pos), kind) for pos, kind in (
+            ((100, 140), 'fast'), ((390, 120), 'ranged'), ((350, 190), 'sentinel'))]
+        boss = world.enemies[-1]
+        for attack_kind in ('melee', 'energy'):
+            boss.attack_kind = attack_kind
+            boss.windup = 0.3
+            self.game.frame(0, [], pygame.Vector2(), (320, 150))
+            self.assertEqual(self.game.window.get_at((300, 100))[:3], ORANGE)
+
 
 if __name__ == '__main__':
     unittest.main()

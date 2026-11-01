@@ -10,6 +10,7 @@ import pygame
 
 from neon.app import Game
 from neon.world import World
+from neon.enemies import create_enemy
 
 
 def capture_sequence(game, output):
@@ -59,6 +60,10 @@ def main():
         game.world.skip_tutorial()
         game.world.wave = 2
         game.world.spawn_wave()
+        game.world.spawn_queue.clear()
+        game.world.enemies = [create_enemy(pygame.Vector2(pos), kind) for pos, kind in (
+            ((110, 130), 'drone'), ((365, 125), 'ranged'), ((170, 205), 'fast'),
+            ((390, 192), 'drone'), ((270, 98), 'ranged'))]
         game.world.intermission = 0
         save('arena')
         game.world.player.combo = 3
@@ -82,7 +87,7 @@ def main():
         game.world.player.combo = 0
         game.world.impact = 0
         game.world.shake = 0
-        game.world.kills = 18
+        game.world.kills = 23
         game.world.elapsed = 76
         game.world.stage = 'victory'
         save('victory')
@@ -91,6 +96,45 @@ def main():
         game.world.kills = 12
         game.world.stage = 'defeat'
         save('defeat')
+        game.world = World(seed=4)
+        game.world.start()
+        game.world.skip_tutorial()
+        game.world.spawn_wave()
+        game.world.update(0.25, pygame.Vector2())
+        save('spawn-warning')
+        game.world = World(seed=4)
+        game.world.stage = 'arena'
+        game.world.wave = 2
+        shooter = create_enemy(pygame.Vector2(350, 155), 'ranged')
+        shooter.cooldown = 0
+        shooter.update(0.01, game.world.player)
+        game.world.enemies = [shooter]
+        save('ranged-warning')
+        for _ in range(100):
+            shooter.update(1 / 120, game.world.player)
+            if shooter.shots:
+                break
+        game.world.projectiles = shooter.shots[:]
+        for shot in game.world.projectiles:
+            shot.update(0.25, game.world.player, game.world.player.pos)
+        save('ranged-shot')
+        game.world.projectiles.clear()
+        game.world.wave = 3
+        game.world.boss_announced = game.world.boss_spawned = True
+        boss = create_enemy(pygame.Vector2(350, 170), 'sentinel')
+        boss.cooldown = 0
+        boss.update(0.01, game.world.player)
+        game.world.enemies = [boss]
+        save('sentinel-energy')
+        boss = create_enemy(game.world.player.pos + pygame.Vector2(30, 0), 'sentinel')
+        boss.cooldown = 0
+        boss.update(0.01, game.world.player)
+        game.world.enemies = [boss]
+        save('sentinel-melee')
+        boss.hp = 0
+        game.world.update(1 / 120, pygame.Vector2())
+        game.world.update(0.25, pygame.Vector2())
+        save('sentinel-destruction')
         game.world = World(seed=4)
         game.world.start()
         game.world.enemies.clear()
@@ -102,7 +146,7 @@ def main():
         capture_sequence(game, output)
     finally:
         pygame.quit()
-    print(f'Saved 9 render fixtures to {output}')
+    print(f'Saved 15 render fixtures to {output}')
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ import pygame
 from neon.art import glow, make_background, make_robot, sword_polygon
 from neon.settings import CYAN, INK, MUTED, ORANGE, PURPLE, WHITE
 from neon.weapon import sword_pose
+from neon.balance import ENEMIES, BOSS_ENERGY_SPREAD, BOSS_DESTRUCTION_TIME, SPAWN_WARNING, WAVES
 
 
 class Renderer:
@@ -17,7 +18,7 @@ class Renderer:
         self.effects = pygame.Surface((480, 270), pygame.SRCALPHA)
         self.camera_offset = (0, 0)
         self.sprites = {(kind, frame, flip, flash): make_robot(kind, frame, flip, flash)
-                        for kind in ('player', 'drone', 'brute', 'dummy')
+                        for kind in ('player', *ENEMIES)
                         for frame in (-1, 0, 1) for flip in (False, True) for flash in (False, True)}
         self.buttons = {}
 
@@ -49,6 +50,7 @@ class Renderer:
     def draw(self, target, world, mouse, time):
         self.scene.blit(self.background, (0, 0))
         self._ambient(self.scene, time)
+        self._spawn_warning(self.scene, world, time)
         actors = [(enemy.pos.y, enemy, enemy.kind) for enemy in world.enemies]
         if world.stage != 'menu':
             actors.append((world.player.pos.y, world.player, 'player'))
@@ -56,6 +58,13 @@ class Renderer:
             self._actor(self.scene, actor, kind)
         if world.stage != 'menu':
             self._sword(self.scene, world.player)
+        for shot in world.projectiles:
+            direction = shot.velocity.normalize()
+            pygame.draw.line(self.scene, (133, 49, 88), shot.pos - direction * 9, shot.pos, shot.radius * 2)
+            pygame.draw.circle(self.scene, ORANGE, shot.pos, shot.radius)
+            pygame.draw.circle(self.scene, (255, 235, 192), shot.pos, max(1, shot.radius - 2))
+        if world.boss_destruction > 0:
+            self._boss_destruction(self.scene, world, time)
         for particle in world.particles:
             size = max(1, round(particle.size * particle.life / particle.total))
             pygame.draw.rect(self.scene, particle.color, (*particle.pos, size, size))
@@ -80,11 +89,17 @@ class Renderer:
             if enemy.kind == 'dummy':
                 self.text(target, 'DRON DE PRÁCTICA', enemy.pos + offset + (0, -34), WHITE, 12, True)
             elif enemy.windup > 0:
-                self.text(target, '!', enemy.pos + offset + (0, -34), ORANGE, 18, True)
+                self.text(target, '!', enemy.pos + offset + (0, -55 if enemy.kind == 'sentinel' else -34), ORANGE, 18, True)
         if world.stage == 'menu':
             self._menu(target, mouse, time)
         else:
             self._hud(target, world)
+            boss = next((enemy for enemy in world.enemies if enemy.kind == 'sentinel'), None)
+            if boss is not None:
+                self.ui_rect(target, INK, (110, 32, 260, 25))
+                self.text(target, 'SENTINEL-X', (240, 39), ORANGE, 14, True)
+                self.ui_rect(target, (56, 33, 45), (118, 49, 244, 5))
+                self.ui_rect(target, ORANGE, (118, 49, round(244 * boss.hp / boss.max_hp), 5))
             if world.paused:
                 self._overlay(target, 'SISTEMA EN PAUSA', 'Respira. La arena puede esperar.')
                 self.button(target, 'resume', 'CONTINUAR  /  ESC', (156, 151, 168, 28), mouse, True)
@@ -92,7 +107,7 @@ class Renderer:
             elif world.stage in ('victory', 'defeat'):
                 victory = world.stage == 'victory'
                 self._overlay(target, 'SECTOR LIBERADO' if victory else 'SEÑAL PERDIDA',
-                              'Tres oleadas. Una máquina imparable.' if victory else 'Tu núcleo se apagó. Vuelve a intentarlo.')
+                              'Sentinel-X destruido. Instalación asegurada.' if victory else 'Tu núcleo se apagó. Vuelve a intentarlo.')
                 self.text(target, f'{world.kills} bajas  /  {int(world.elapsed)} s', (240, 142), MUTED, 16, True)
                 self.button(target, 'restart', 'REINICIAR  /  R', (156, 166, 168, 28), mouse, True)
                 self.button(target, 'menu', 'VOLVER AL INICIO', (156, 204, 168, 25), mouse)
@@ -102,8 +117,15 @@ class Renderer:
                     self.text(target, f'CALIBRACIÓN  /  Conecta 4 golpes: {world.tutorial_hits}/4', (240, 49), WHITE, 14, True)
                     self.button(target, 'skip', 'OMITIR  >', (377, 30, 88, 19), mouse)
                 elif world.intermission > 0:
-                    self.text(target, f'OLEADA {world.wave + 1}  /  {math.ceil(world.intermission)}', (240, 116), CYAN, 28, True)
+                    title = 'ALERTA: SENTINEL-X' if world.boss_announced else f'OLEADA {world.wave + 1}  /  {math.ceil(world.intermission)}'
+                    self.text(target, title, (240, 116), ORANGE if world.boss_announced else CYAN, 28, True)
                     self.text(target, 'Núcleo estabilizado · Prepárate', (240, 137), WHITE, 14, True)
+                elif world.boss_destruction > 0:
+                    self.text(target, 'NÚCLEO INESTABLE', (240, 49), ORANGE, 16, True)
+                elif world.stage == 'arena' and boss is None:
+                    remaining = len(world.enemies) + len(world.spawn_queue)
+                    self.ui_rect(target, INK, (151, 35, 178, 19))
+                    self.text(target, f'HOSTILES RESTANTES: {remaining}', (240, 45), MUTED, 12, True)
                 self._crosshair(target, mouse)
         if not world.playing or world.paused:
             x, y = mouse
@@ -122,26 +144,60 @@ class Renderer:
     def _actor(self, target, actor, kind):
         player = kind == 'player'
         x, y = round(actor.pos.x), round(actor.pos.y)
-        pygame.draw.ellipse(target, (10, 17, 26), (x - 10, y - 3, 20, 7))
+        pygame.draw.ellipse(target, (10, 17, 26), (x - 17, y - 4, 34, 10) if kind == 'sentinel' else (x - 10, y - 3, 20, 7))
         if player and actor.dash_left > 0:
             for index in (3, 2, 1):
                 pos = actor.pos - actor.dash_direction * index * 7
                 pygame.draw.ellipse(target, (25, 66, 82), (pos.x - 7, pos.y - 10, 14, 10), 1)
         if not player and actor.windup > 0:
-            pygame.draw.circle(target, ORANGE, (x, y), 24, 1)
-            pygame.draw.circle(target, (130, 70, 50), (x, y), max(3, int(24 * actor.windup / 0.42)), 1)
+            if getattr(actor, 'attack_kind', 'melee') == 'energy':
+                origin = actor.pos + pygame.Vector2(0, -18 if kind == 'sentinel' else -10)
+                for angle in BOSS_ENERGY_SPREAD if kind == 'sentinel' else (0,):
+                    direction = actor.locked_aim.rotate(angle)
+                    for distance in range(22, 230, 12):
+                        point = origin + direction * distance
+                        if 24 <= point.x <= 456 and 62 <= point.y <= 244:
+                            pygame.draw.line(target, (183, 80, 91), point, point + direction * 5)
+                pygame.draw.circle(target, ORANGE, origin + actor.locked_aim * (20 if kind == 'sentinel' else 12),
+                                   4 + int(actor.age * 14) % 3, 1)
+            else:
+                radius = round(actor.stats.reach)
+                pygame.draw.circle(target, ORANGE, (x, y), radius, 1)
+                pygame.draw.circle(target, (130, 70, 50), (x, y), max(3, int(radius * actor.windup / actor.stats.windup)), 1)
         age = actor.walk_time if player else actor.age * 8
-        moving = actor.moving if player else kind != 'dummy' and actor.windup == 0 and actor.stun == 0
+        moving = actor.moving if player else kind != 'dummy' and actor.windup == 0 and actor.stun == 0 and getattr(actor, 'recovery', 0) == 0
         frame = (1 if math.sin(age) > 0 else -1) if moving else 0
         flash = (actor.invulnerable > 0 and int(actor.invulnerable * 22) % 2 == 0) if player else actor.flash > 0
         sprite = self.sprites[kind, frame, actor.facing.x < 0, flash]
         bob = -1 if moving and frame == 1 else 0
-        target.blit(sprite, (x - 12, y - 24 + bob))
-        if not player and kind != 'dummy' and actor.hp < actor.max_hp:
+        if kind == 'sentinel' and actor.recovery > 0:
+            bob = 2
+        target.blit(sprite, (x - sprite.get_width() // 2, y - (48 if kind == 'sentinel' else 24) + bob))
+        if kind == 'sentinel' and actor.recovery > 0:
+            pygame.draw.circle(target, (117, 67, 52), (x, y - 20), 9, 1)
+            pygame.draw.line(target, ORANGE, (x - 4, y - 20), (x + 4, y - 20))
+        if not player and kind not in ('dummy', 'sentinel') and actor.hp < actor.max_hp:
             pygame.draw.rect(target, (15, 19, 30), (x - 11, y - 29, 22, 3))
             pygame.draw.rect(target, ORANGE, (x - 11, y - 29, max(1, int(22 * actor.hp / actor.max_hp)), 2))
         if kind == 'dummy':
             pygame.draw.circle(target, PURPLE, (x, y + 1), 14, 1)
+
+    def _spawn_warning(self, target, world, time):
+        ticket = world.pending_spawn
+        if ticket is None:
+            return
+        radius = 20 if ticket.kind == 'sentinel' else 12
+        pygame.draw.circle(target, PURPLE, ticket.pos, radius, 1)
+        pygame.draw.circle(target, (91, 64, 131), ticket.pos, max(2, round(radius * ticket.left / SPAWN_WARNING)), 1)
+        pygame.draw.line(target, PURPLE, ticket.pos + (-4, 0), ticket.pos + (4, 0))
+
+    def _boss_destruction(self, target, world, time):
+        pos = world.boss_death_pos
+        if int(world.boss_destruction * 24) % 2:
+            sprite = self.sprites['sentinel', 0, False, True]
+            target.blit(sprite, (pos.x - 24, pos.y - 48))
+        radius = round(10 + (1 - world.boss_destruction / BOSS_DESTRUCTION_TIME) * 35)
+        pygame.draw.circle(target, ORANGE, pos + (0, -18), radius, 2)
 
     def _sword(self, target, player):
         pose = sword_pose(player)
@@ -200,7 +256,8 @@ class Renderer:
         self.text(target, 'ESQUIVA', (287, 5), MUTED, 12)
         self.ui_rect(target, (42, 49, 69), (288, 18, 44, 4))
         self.ui_rect(target, PURPLE, (288, 18, int(44 * (1 - world.player.dash_cooldown / 0.8)), 4))
-        self.text(target, 'ENTRENAMIENTO' if world.stage == 'tutorial' else f'OLEADA  {world.wave}/3', (372, 9), WHITE, 16)
+        status = 'ENTRENAMIENTO' if world.stage == 'tutorial' else ('SENTINEL-X' if world.boss_spawned else f'OLEADA  {world.wave}/{len(WAVES)}')
+        self.text(target, status, (372, 9), WHITE, 16)
         self.ui_rect(target, INK, (0, 254, 480, 16))
         self.text(target, 'WASD mover   /   RATÓN apuntar   /   CLIC o J atacar   /   SHIFT esquivar   /   ESC pausa', (240, 262), MUTED, 12, True)
 

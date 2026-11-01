@@ -45,9 +45,22 @@ nearest-neighbor scaling. Text and interface geometry are drawn afterward at
 | R | Restart after victory or defeat |
 
 The tutorial asks for four successful hits on a durable training drone. The
-`OMITIR` button skips to the arena. The main arena contains waves of 4, 6 and 8
-enemies. Later waves introduce slower, tougher guards. Enemies telegraph an
-attack with an orange circle and `!`; move away or dodge before it resolves.
+`OMITIR` button skips to the arena. Wave 1 contains five melee drones; wave 2
+has five drones and two ranged units; wave 3 has five drones, three fast units
+and two ranged units. Sentinel-X arrives after all three waves. Victory requires
+destroying this miniboss, not just clearing wave 3.
+
+Enemies arrive one at a time after a purple spawn warning, with at most five
+active units. Spawns are checked against player distance, existing enemies,
+arena boundaries and decorative prop rectangles, including after the warning.
+Fast units have shorter attack timing, ranged units retreat and fire fixed-aim
+orange projectiles, and Sentinel-X alternates context-dependent melee slams
+and a three-shot energy spread. Orange circles or dashed trajectories announce
+attacks; move or dodge before they resolve. Boss recovery is an attack window.
+
+All enemy health, damage, movement and timing, projectile parameters, spawn
+limits and wave composition are in `neon/balance.py`. See the
+[iteration-three guide](docs/ITERATION_3.md) for values and manual checks.
 
 Sword attacks sweep a hand-anchored blade and can hit each enemy once per swing.
 Preparation, strike and recovery share one pose calculation for drawing and
@@ -76,6 +89,9 @@ focus pauses active play automatically.
 | `neon/combat.py` | Player/enemy movement, timers, damage and actual sword pose history |
 | `neon/weapon.py` | Shared weapon phases, hand anchor, pose and swept collision |
 | `neon/world.py` | Tutorial, waves, combat resolution, particles and outcomes |
+| `neon/balance.py` | Enemy, projectile, spawn, wave and miniboss tuning |
+| `neon/enemies.py` | RangedEnemy, Sentinel and configured enemy factory |
+| `neon/projectiles.py` | Energy shots, lifetime, bounds and swept collision |
 | `neon/art.py` | Original pixel sprites, floor tiles, consoles and lighting |
 | `neon/renderer.py` | Drawing, sword animation, HUD, buttons and overlays |
 | `tests/` | Standard-library unittest checks of gameplay and rendering |
@@ -85,7 +101,8 @@ Simulation does not depend on the display. It subdivides updates into steps of
 at most 1/120 second to avoid missing sword timing windows at lower frame rates.
 Delays beyond 0.25 seconds are discarded to avoid large jumps after a stall.
 Sprites and the arena background are generated once and cached. Particles are
-capped at 220; the arena has at most eight enemies.
+capped at 220, active enemies at five and projectiles at 32. Sword history and
+impact records retain their existing caps.
 
 ## Verification
 
