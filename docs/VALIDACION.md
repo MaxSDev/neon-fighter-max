@@ -1,4 +1,47 @@
-# Current validation: iteration three
+# Current validation: iteration four
+
+Validated 2026-10-31 in the existing Windows / Python 3.12.6 / pygame-ce 2.5.8
+environment. No dependencies installed or upgraded.
+
+| Check | Result | Boundary |
+| --- | --- | --- |
+| unittest suite | PASS: 57 tests | Gameplay, interactive tutorial, endings, real WAV loading/playback and error paths |
+| Syntax compilation | PASS | `main.py`, `neon`, `tests`, `tools` |
+| Entry-point smoke test | PASS: 120 frames | SDL dummy video/audio; no native device or listening claim |
+| Audio inventory | PASS: 25 actual WAV files, 3,411,106 bytes | Six music tracks, nineteen effects, reproducible source and SHA-256 manifest |
+| Preview generation | PASS: 25 PNG fixtures | Includes tutorial stages and ending keyframes |
+
+Full tutorial completion, ENTER/button skipping, menu training replay, both dash
+completion paths, normal-stat arena victory, queued waves, projectiles, sword
+phases and combos remain checked. Boss victory is delayed until the full 3.1s
+ending; player defeat is delayed 1.75s. A real killing swing preserves contact
+feedback and starts one destruction event. Ending inputs cannot move the player
+or run enemy AI/spawning.
+
+All actual WAVs decode as nonempty 16-bit PCM. SDL dummy audio accepts every
+effect and each music scene; current-track load counters prove no per-frame
+restart or restart between player collapse and defeat. Muting drains pending
+events. Missing assets and unavailable mixer initialization are nonfatal.
+These checks do not prove audible quality, physical speaker output or balance.
+
+The new test targets initially failed because the new lifecycle/tutorial API
+was absent. Earlier tests were adapted where behavior intentionally changed:
+combat fixtures bypass movement teaching, immediate-death assertions now wait,
+and the full arena controller waits through `boss_dying` rather than stopping
+when combat input is disabled. A temporary test-file indentation error was
+corrected; the final complete suite passes without skipped tests.
+
+Static inspection covered the menu/audio panel, combo and dodge instructions,
+boss unstable core/explosion/aftermath and player collapse. Final keyframe checks
+also include movement, completion, fade, victory and defeat. These are staged
+frames, not a manually played recording.
+
+The user's third-iteration manual acceptance is context, not validation of this
+new build. Listening, physical audio device behavior, native manual gameplay,
+Linux and sustained 60 FPS remain pending. See [ITERATION_4.md](ITERATION_4.md)
+for commands/manual checks and [ASSETS.md](ASSETS.md) for actual provenance.
+
+# Historical validation: iteration three
 
 Validated on 2026-10-31 with the existing Python 3.12.6 / pygame-ce 2.5.8
 environment on Windows. No packages were installed or upgraded.

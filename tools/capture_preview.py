@@ -22,6 +22,7 @@ def capture_sequence(game, output):
     for combo in range(1, 5):
         world = World(seed=4)
         world.start()
+        world.scene_age = 1
         world.enemies.clear()
         world.player.combo = combo - 1
         world.player.combo_window = 1
@@ -48,15 +49,23 @@ def main():
     game = Game()
 
     def save(name):
+        if game.world.stage not in ('boss_dying', 'player_dying'):
+            game.world.scene_age = max(1, game.world.scene_age)
         game.renderer.draw(game.canvas, game.world, (345, 153), 2)
         pygame.transform.scale(game.canvas, (960, 540), game.window)
-        game.renderer.draw_ui(game.window, game.world, (345, 153), 2)
+        game.renderer.draw_ui(game.window, game.world, (345, 153), 2, game.audio)
         pygame.image.save(game.window, output / f'{name}.png')
 
     try:
         save('menu')
         game.world.start()
         save('tutorial')
+        for step in ('attack', 'combo', 'dodge', 'complete'):
+            game.world.tutorial.step = step
+            if step == 'dodge':
+                game.world.tutorial.warning = 0.5
+                game.world.tutorial.aim = (game.world.player.pos + pygame.Vector2(0, -10) - game.world.tutorial.emitter).normalize()
+            save(f'training-{step}')
         game.world.skip_tutorial()
         game.world.wave = 2
         game.world.spawn_wave()
@@ -135,6 +144,20 @@ def main():
         game.world.update(1 / 120, pygame.Vector2())
         game.world.update(0.25, pygame.Vector2())
         save('sentinel-destruction')
+        for age, name in ((0.9, 'sentinel-core-failing'), (1.45, 'sentinel-explosion'),
+                          (2.1, 'sentinel-aftermath'), (2.9, 'sentinel-victory-fade')):
+            while game.world.sequence_elapsed < age:
+                game.world.update(min(1 / 60, age - game.world.sequence_elapsed), pygame.Vector2())
+            save(name)
+        game.world = World(seed=4)
+        game.world.start()
+        game.world.skip_tutorial()
+        game.world.player.hp = 0
+        game.world.update(1 / 120, pygame.Vector2())
+        for age, name in ((0.65, 'player-collapse'), (1.4, 'player-fade')):
+            while game.world.sequence_elapsed < age:
+                game.world.update(min(1 / 60, age - game.world.sequence_elapsed), pygame.Vector2())
+            save(name)
         game.world = World(seed=4)
         game.world.start()
         game.world.enemies.clear()
@@ -146,7 +169,7 @@ def main():
         capture_sequence(game, output)
     finally:
         pygame.quit()
-    print(f'Saved 15 render fixtures to {output}')
+    print(f'Render fixtures available: {len(list(output.glob("*.png")))} PNG files in {output}')
 
 
 if __name__ == '__main__':

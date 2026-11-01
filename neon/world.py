@@ -11,9 +11,11 @@ from pygame import Vector2
 from neon.combat import Enemy, Player
 from neon.settings import ARENA, OBSTACLES, BASE_SWORD_DAMAGE, COMBO_DAMAGE_MULTIPLIERS, CYAN, ORANGE, PURPLE, clamp_position
 from neon.balance import (ENEMIES, WAVES, MAX_ACTIVE_ENEMIES, SPAWN_INTERVAL, SPAWN_WARNING,
-                          SPAWN_PLAYER_DISTANCE, WAVE_BREAK, WAVE_HEAL, BOSS_DESTRUCTION_TIME, MAX_PROJECTILES)
+                          SPAWN_PLAYER_DISTANCE, WAVE_BREAK, WAVE_HEAL, BOSS_DESTRUCTION_TIME,
+                          BOSS_EXPLOSION_AT, PLAYER_DEFEAT_TIME, MAX_PROJECTILES)
 from neon.weapon import sword_contact
 from neon.enemies import create_enemy
+from neon.tutorial import Tutorial
 
 
 @dataclass
@@ -80,6 +82,24 @@ class World:
         self.boss_destruction = 0
         self.boss_death_pos = None
         self.destruction_tick = 0
+        self.tutorial = Tutorial()
+        self.audio_events = deque(maxlen=128)
+        self.sequence_elapsed = 0
+        self.boss_exploded = False
+        self.scene_age = 1
+
+    def emit(self, event):
+        self.audio_events.append(event)
+
+    def drain_audio_events(self):
+        events = list(self.audio_events)
+        self.audio_events.clear()
+        return events
+
+    def _set_stage(self, stage):
+        if self.stage != stage:
+            self.stage = stage
+            self.scene_age = 0
 
     @property
     def playing(self):
@@ -87,14 +107,15 @@ class World:
 
     def start(self):
         self.__init__(self.seed)
-        self.stage = 'tutorial'
+        self._set_stage('tutorial')
         self.enemies = [Enemy(Vector2(322, 154), kind='dummy', hp=999, max_hp=999, speed=0)]
 
     def skip_tutorial(self):
         if self.stage != 'tutorial':
             return
-        self.stage = 'arena'
+        self._set_stage('arena')
         self.enemies.clear()
+        self.projectiles.clear()
         self.player = Player()
         self.intermission = 1.6
         self.attack_buffer = 0
@@ -113,10 +134,15 @@ class World:
             return
         if not self.player.attack(aim):
             self.attack_buffer = 0.18
+        else:
+            self.emit('swing_heavy' if self.player.combo == 4 else 'swing')
 
     def dodge(self, direction):
         if self.playing and not self.paused and self.player.dodge(direction):
             self.burst(self.player.pos, CYAN, 10)
+            self.emit('dash')
+            if self.stage == 'tutorial' and self.tutorial.step == 'dodge':
+                self.tutorial.dashes += 1
 
     def burst(self, pos, color, count):
         for _ in range(count):
@@ -133,6 +159,7 @@ class World:
         self.spawn_queue.extend(WAVES[self.wave - 1])
         self.intermission = 0
         self.spawn_timer = 0
+        self.emit('wave_start')
 
     @staticmethod
     def spawn_bounds_valid(pos, kind):
@@ -168,6 +195,8 @@ class World:
                 self.spawn_queue.popleft()
                 self.spawn_history.append((self.elapsed, ticket.kind, ticket.pos.copy()))
                 self.boss_spawned |= ticket.kind == 'sentinel'
+                if ticket.kind == 'sentinel':
+                    self.emit('boss_spawn')
                 self.burst(ticket.pos, PURPLE, 12)
                 self.pending_spawn = None
                 self.spawn_timer = SPAWN_INTERVAL
@@ -182,25 +211,23 @@ class World:
             if enemy.hp > 0:
                 continue
             self.kills += 1
+            self.emit('enemy_destroy' if enemy.kind != 'sentinel' else 'boss_destroy')
             self.burst(enemy.pos, ORANGE, 16)
             if enemy.kind == 'sentinel':
                 self.boss_defeated = True
                 self.boss_destruction = BOSS_DESTRUCTION_TIME
                 self.boss_death_pos = enemy.pos.copy()
+                self.sequence_elapsed = 0
+                self.player.dash_left = 0
+                self.attack_buffer = 0
+                self._set_stage('boss_dying')
                 self.projectiles.clear()
+                self.spawn_queue.clear()
+                self.pending_spawn = None
                 self.burst(enemy.pos + Vector2(0, -18), ORANGE, 35)
         self.enemies = [enemy for enemy in self.enemies if enemy.hp > 0]
 
     def _advance_progression(self, dt):
-        if self.boss_defeated:
-            self.boss_destruction = max(0, self.boss_destruction - dt)
-            self.destruction_tick += dt
-            if self.destruction_tick >= 0.12:
-                self.destruction_tick = 0
-                self.burst(self.boss_death_pos + Vector2(0, -18), ORANGE, 8)
-            if self.boss_destruction == 0:
-                self.stage = 'victory'
-            return
         if self.enemies or self.spawn_queue or self.pending_spawn:
             self._update_spawns(dt)
             return
@@ -222,6 +249,10 @@ class World:
     def update(self, dt, movement, aim=None):
         if self.paused:
             return
+        self.scene_age += min(max(dt, 0), 0.25)
+        if self.stage in ('boss_dying', 'player_dying'):
+            self._update_sequence(min(max(dt, 0), 0.25))
+            return
         if not self.playing:
             if self.stage in ('victory', 'defeat'):
                 dt = min(max(dt, 0), 0.25)
@@ -237,6 +268,44 @@ class World:
             step = min(remaining, 1 / 120)
             self._step(step, movement, aim)
             remaining -= step
+
+    def _begin_player_defeat(self):
+        self._set_stage('player_dying')
+        self.sequence_elapsed = 0
+        self.player.attack_left = 0
+        self.player.dash_left = 0
+        self.attack_buffer = 0
+        self.projectiles.clear()
+        self.emit('defeat')
+        self.burst(self.player.pos + Vector2(0, -10), CYAN, 24)
+
+    def _update_sequence(self, dt):
+        self.sequence_elapsed += dt
+        self._update_feedback(dt)
+        # Finish the killing swing while freezing translation, enemies and spawns.
+        if self.hitstop > 0:
+            self.hitstop = max(0, self.hitstop - dt)
+        else:
+            self.player.update(dt, Vector2())
+        if self.stage == 'boss_dying':
+            self.boss_destruction = max(0, BOSS_DESTRUCTION_TIME - self.sequence_elapsed)
+            self.destruction_tick += dt
+            if self.sequence_elapsed < BOSS_EXPLOSION_AT and self.destruction_tick >= 0.12:
+                self.destruction_tick = 0
+                self.burst(self.boss_death_pos + Vector2(0, -18), ORANGE, 5)
+            if self.sequence_elapsed >= BOSS_EXPLOSION_AT and not self.boss_exploded:
+                self.boss_exploded = True
+                self.emit('hit_heavy')
+                self.burst(self.boss_death_pos + Vector2(0, -18), ORANGE, 60)
+                for _ in range(18):
+                    velocity = Vector2(self.rng.uniform(-65, 65), self.rng.uniform(-60, 25))
+                    self.particles.append(Particle(self.boss_death_pos + Vector2(0, -18), velocity,
+                                                   self.rng.choice((CYAN, ORANGE, PURPLE)), 1.2, 1.2, 3))
+            if self.boss_destruction == 0:
+                self._set_stage('victory')
+                self.emit('victory')
+        elif self.sequence_elapsed >= PLAYER_DEFEAT_TIME:
+            self._set_stage('defeat')
 
     def _update_feedback(self, dt):
         self.impact = max(0, self.impact - dt)
@@ -260,7 +329,7 @@ class World:
             self.hitstop = max(0, self.hitstop - dt)
             return
         if self.player.hp <= 0:
-            self.stage = 'defeat'
+            self._begin_player_defeat()
             return
         self.elapsed += dt
         player = self.player
@@ -271,19 +340,29 @@ class World:
             self.attack_buffer = max(0, self.attack_buffer - dt)
             if player.attack_left == 0 and player.dash_left == 0:
                 player.attack(aim if aim is not None else player.facing)
+                self.emit('swing_heavy' if player.combo == 4 else 'swing')
                 self.attack_buffer = 0
         if player.strike_active:
             self._resolve_strike()
+        if any(enemy.kind == 'sentinel' and enemy.hp <= 0 for enemy in self.enemies):
+            self._collect_dead()
+            return
         for enemy in self.enemies:
             if enemy.kind == 'dummy':
                 enemy.flash = max(0, enemy.flash - dt)
                 continue
             if enemy.hp <= 0:
                 continue
+            was_preparing = enemy.windup > 0
             if enemy.update(dt, player):
                 self.burst(player.pos, ORANGE, 18)
                 self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{enemy.stats.damage}', ORANGE))
                 self.shake = max(self.shake, 2)
+                self.emit('player_hurt')
+            if enemy.kind == 'sentinel' and not was_preparing and enemy.windup > 0:
+                self.emit('boss_attack')
+            if enemy.shots:
+                self.emit('enemy_shot')
             self.projectiles.extend(enemy.shots[:max(0, MAX_PROJECTILES - len(self.projectiles))])
             enemy.shots.clear()
         for shot in self.projectiles:
@@ -291,6 +370,10 @@ class World:
                 self.burst(player.pos + Vector2(0, -10), ORANGE, 12)
                 self.damage_texts.append(DamageText(player.pos + Vector2(0, -23), f'-{shot.damage}', ORANGE))
                 self.shake = max(self.shake, 1.5)
+            if shot.contact:
+                self.emit('projectile_hit')
+                if shot.training and shot.evaded:
+                    self.tutorial.evaded = True
         self.projectiles = [shot for shot in self.projectiles if shot.alive]
         # Soft body separation avoids enemies collapsing into one unreadable sprite.
         for index, first in enumerate(self.enemies):
@@ -306,13 +389,24 @@ class World:
                     clamp_position(second.pos, second.radius)
         self._collect_dead()
         if player.hp <= 0:
-            self.stage = 'defeat'
-        elif self.stage == 'tutorial' and self.tutorial_hits >= 4:
-            self.skip_tutorial()
+            self._begin_player_defeat()
+        elif self.stage == 'tutorial':
+            previous_step = self.tutorial.step
+            moved = player.pos.distance_to(player.previous_pos) if movement.length_squared() and player.dash_left == 0 else 0
+            shot = self.tutorial.update(dt, moved, player)
+            if shot is not None:
+                self.projectiles.append(shot)
+                self.emit('enemy_shot')
+            if self.tutorial.step != previous_step:
+                self.emit('tutorial_step')
+            if self.tutorial.finished:
+                self.skip_tutorial()
         elif self.stage == 'arena':
             self._advance_progression(dt)
 
     def _resolve_strike(self):
+        if self.stage == 'tutorial' and self.tutorial.step == 'movement':
+            return
         player = self.player
         finisher = player.combo == 4
         for enemy in self.enemies:
@@ -326,6 +420,12 @@ class World:
             direction = enemy.pos - player.pos
             direction = direction.normalize() if direction.length_squared() else player.facing
             enemy.hit(damage, direction, finisher)
+            if enemy.kind == 'dummy':
+                enemy.hp = max(100, enemy.hp)
+            self.emit('hit_heavy' if finisher else 'hit')
+            self.emit('enemy_hurt')
+            if finisher:
+                self.emit('spark')
             self.burst(contact, PURPLE if finisher else CYAN, 22 if finisher else 10)
             self.impacts.append(Impact(contact, direction, finisher))
             self.impacts = self.impacts[-24:]
@@ -336,3 +436,7 @@ class World:
                 self.impact = 0.065
             if self.stage == 'tutorial':
                 self.tutorial_hits += 1
+                if self.tutorial.register_hit(player.combo):
+                    player.combo = 0
+                    player.combo_window = 0
+                    self.emit('tutorial_step')

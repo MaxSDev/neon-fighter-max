@@ -42,6 +42,9 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.game.world.player.attack_left, 0)
         self.game.world.player.hp = 0
         self.game.frame(1 / 60, [], pygame.Vector2(), (320, 150))
+        self.assertEqual(self.game.world.stage, 'player_dying')
+        for _ in range(120):
+            self.game.frame(1 / 60, [], pygame.Vector2(), (320, 150))
         self.assertEqual(self.game.world.stage, 'defeat')
         self.key(pygame.K_r)
         self.assertEqual(self.game.world.stage, 'tutorial')
@@ -53,6 +56,7 @@ class AppTests(unittest.TestCase):
             pygame.transform.scale(self.game.canvas, (960, 540), self.game.window)
             self.game.renderer.draw_ui(self.game.window, self.game.world, (300, 160), 1)
         self.game.world.start()
+        self.game.world.tutorial.step = 'combo'
         self.game.world.player.combo = 3
         self.game.world.player.combo_window = 1
         self.game.world.attack(pygame.Vector2(1, 0))
@@ -115,6 +119,37 @@ class AppTests(unittest.TestCase):
             boss.windup = 0.3
             self.game.frame(0, [], pygame.Vector2(), (320, 150))
             self.assertEqual(self.game.window.get_at((300, 100))[:3], ORANGE)
+
+    def test_enter_skip_menu_training_and_audio_controls(self):
+        self.key(pygame.K_RETURN)
+        self.key(pygame.K_RETURN)
+        self.assertEqual(self.game.world.stage, 'arena')
+        self.game.action('menu')
+        self.game.action('training')
+        self.assertEqual(self.game.world.tutorial.step, 'movement')
+        self.key(pygame.K_m)
+        self.assertTrue(self.game.audio.muted)
+        self.game.action('music_down')
+        self.game.action('effects_down')
+        self.assertAlmostEqual(self.game.audio.music_volume, 0.2)
+        self.assertAlmostEqual(self.game.audio.effects_volume, 0.55)
+
+    def test_ending_screens_and_every_training_step_render(self):
+        self.game.world.start()
+        for step in ('movement', 'attack', 'combo', 'dodge', 'complete'):
+            self.game.world.tutorial.step = step
+            self.game.frame(0, [], pygame.Vector2(), (320, 150))
+            self.assertIn('skip', self.game.renderer.buttons)
+        self.game.world.stage = 'boss_dying'
+        self.game.world.boss_death_pos = pygame.Vector2(320, 150)
+        self.game.world.boss_destruction = 3.1
+        for age in (0.1, 0.9, 1.45, 2.1, 2.9):
+            self.game.world.sequence_elapsed = age
+            self.game.frame(0, [], pygame.Vector2(), (320, 150))
+            self.assertNotIn('restart', self.game.renderer.buttons)
+        self.game.world.stage = 'victory'
+        self.game.frame(0, [], pygame.Vector2(), (320, 150))
+        self.assertTrue({'restart', 'menu', 'quit'}.issubset(self.game.renderer.buttons))
 
 
 if __name__ == '__main__':

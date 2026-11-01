@@ -16,6 +16,9 @@ class Projectile:
     radius: int
     life: float
     alive: bool = True
+    training: bool = False
+    contact: bool = False
+    evaded: bool = False
 
     @classmethod
     def launch(cls, pos, direction, damage, kind):
@@ -40,7 +43,9 @@ class Projectile:
         if closest.length_squared() <= (8 + self.radius) ** 2:
             # Contact consumes the shot even if the player is invulnerable.
             self.alive = False
-            return player.hurt(self.damage)
+            self.contact = True
+            self.evaded = player.invulnerable > 0
+            return player.hurt(self.damage) if not self.training else False
         if self.life <= 0 or not ARENA.collidepoint(self.pos):
             self.alive = False
         return False

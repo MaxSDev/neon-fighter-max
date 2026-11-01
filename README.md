@@ -44,8 +44,10 @@ nearest-neighbor scaling. Text and interface geometry are drawn afterward at
 | Enter | Start from the menu |
 | R | Restart after victory or defeat |
 
-The tutorial asks for four successful hits on a durable training drone. The
-`OMITIR` button skips to the arena. Wave 1 contains five melee drones; wave 2
+The interactive tutorial teaches WASD movement, a sword contact, a connected
+four-hit combo and dash practice against harmless energy shots. ENTER or the
+`OMITIR` button skips to the arena; training can be repeated from the menu.
+Wave 1 contains five melee drones; wave 2
 has five drones and two ranged units; wave 3 has five drones, three fast units
 and two ranged units. Sentinel-X arrives after all three waves. Victory requires
 destroying this miniboss, not just clearing wave 3.
@@ -92,6 +94,8 @@ focus pauses active play automatically.
 | `neon/balance.py` | Enemy, projectile, spawn, wave and miniboss tuning |
 | `neon/enemies.py` | RangedEnemy, Sentinel and configured enemy factory |
 | `neon/projectiles.py` | Energy shots, lifetime, bounds and swept collision |
+| `neon/tutorial.py` | Contextual objectives and safe training emitter |
+| `neon/audio.py` | Real local effects/music, fades, volume and silent fallback |
 | `neon/art.py` | Original pixel sprites, floor tiles, consoles and lighting |
 | `neon/renderer.py` | Drawing, sword animation, HUD, buttons and overlays |
 | `tests/` | Standard-library unittest checks of gameplay and rendering |
@@ -120,6 +124,9 @@ screen. Preview screenshots are staged fixtures, not recordings of manual play.
 See [validation results](docs/VALIDACION.md) for the actual checks and limits.
 See [combat polish and manual test guide](docs/COMBAT_POLISH.md) for the current
 animation, effects, balance settings and seven manual acceptance checks.
+See [iteration four](docs/ITERATION_4.md) for interactive training, the 3.1s boss
+ending, 1.75s player defeat and audio controls. All 25 actual WAV resources are
+included locally; provenance and regeneration are documented in [ASSETS.md](docs/ASSETS.md).
 
 ## Art and prototype limits
 
@@ -128,10 +135,16 @@ patterns in `neon/art.py`; no external art packages or commercial sprites were
 used. Text uses pygame's bundled default font. `assets/` remains available for
 future project-owned resources. Screenshots are generated from this code.
 
-This first prototype has no audio, save system, controller support, obstacles
+This prototype has no save system, controller support, obstacles
 with pathfinding or settings screen. The tutorial drone is stationary and safe.
 Facing uses horizontal sprite mirroring; sword aim is continuous in all directions.
 Environmental props are decorative. Lighting is painted into the background;
 there are no dynamic shadows. Camera shake, hitstop and impact frames are simple
 effects. Balance, native-window game feel, sustained FPS and Linux runtime
 compatibility still require manual validation.
+
+Music/effects default to 30%/65%. Use menu/pause buttons or F5/F6 and F7/F8 to
+adjust them; M toggles mute. Preferences last for the session. Audio assets are
+loaded directly from `assets/audio/` with no runtime internet access. If no audio
+device can initialize, the game continues silently. Included music and effects
+are original procedural WAVs, not placeholders or external commercial samples.

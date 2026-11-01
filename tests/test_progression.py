@@ -44,10 +44,10 @@ class ProgressionTests(unittest.TestCase):
             if world.boss_defeated:
                 break
         self.assertTrue(world.boss_defeated)
-        self.assertEqual(world.stage, 'arena')
+        self.assertEqual(world.stage, 'boss_dying')
         self.assertGreater(world.boss_destruction, 0)
         self.assertEqual(Counter(kind for _, kind, _ in world.spawn_history), Counter(drone=15, fast=3, ranged=4, sentinel=1))
-        for _ in range(180):
+        for _ in range(420):
             world.update(1 / 120, Vector2())
         self.assertEqual(world.stage, 'victory')
 

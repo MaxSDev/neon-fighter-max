@@ -5,6 +5,7 @@ import pygame
 from neon.renderer import Renderer
 from neon.settings import FPS, INTERNAL_SIZE, WINDOW_SIZE
 from neon.world import World
+from neon.audio import AudioManager
 
 
 class Game:
@@ -16,6 +17,7 @@ class Game:
         self.canvas = pygame.Surface(INTERNAL_SIZE)
         self.renderer = Renderer()
         self.world = World()
+        self.audio = AudioManager()
         self.clock = pygame.time.Clock()
         self.running = True
         self.time = 0
@@ -23,7 +25,8 @@ class Game:
         pygame.mouse.set_visible(False)
 
     def action(self, name):
-        if name in ('play', 'restart'):
+        self.audio.play('button')
+        if name in ('play', 'restart', 'training'):
             self.world.start()
         elif name == 'skip':
             self.world.skip_tutorial()
@@ -33,6 +36,11 @@ class Game:
             self.world = World()
         elif name == 'quit':
             self.running = False
+        elif name == 'mute':
+            self.audio.toggle_mute()
+        elif name in ('music_down', 'music_up', 'effects_down', 'effects_up'):
+            category, direction = name.split('_')
+            self.audio.adjust(category, -0.1 if direction == 'down' else 0.1)
 
     def handle_event(self, event, mouse):
         world = self.world
@@ -46,6 +54,13 @@ class Game:
                 world.toggle_pause()
             elif event.key == pygame.K_RETURN and world.stage == 'menu':
                 self.action('play')
+            elif event.key == pygame.K_RETURN and world.stage == 'tutorial':
+                self.action('skip')
+            elif event.key == pygame.K_m:
+                self.audio.toggle_mute()
+            elif event.key in (pygame.K_F5, pygame.K_F6, pygame.K_F7, pygame.K_F8):
+                category = 'music' if event.key in (pygame.K_F5, pygame.K_F6) else 'effects'
+                self.audio.adjust(category, -0.1 if event.key in (pygame.K_F5, pygame.K_F7) else 0.1)
             elif event.key == pygame.K_r and world.stage in ('victory', 'defeat'):
                 self.action('restart')
             elif event.key == pygame.K_j:
@@ -71,12 +86,13 @@ class Game:
         for event in pygame.event.get() if events is None else events:
             self.handle_event(event, mouse)
         self.world.update(dt, movement, pygame.Vector2(mouse) - self.world.player.pos)
+        self.audio.update(dt, self.world)
         if not self.world.paused:
             self.time += dt
         self.renderer.draw(self.canvas, self.world, mouse, self.time)
         # Nearest-neighbor scaling preserves the intentional pixel grid.
         pygame.transform.scale(self.canvas, WINDOW_SIZE, self.window)
-        self.renderer.draw_ui(self.window, self.world, mouse, self.time)
+        self.renderer.draw_ui(self.window, self.world, mouse, self.time, self.audio)
         pygame.display.flip()
 
     def run(self, smoke_test=False):

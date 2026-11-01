@@ -1,0 +1,202 @@
+[
+  {
+    "file": "music/arena.wav",
+    "seconds": 16.0,
+    "sample_rate": 22050,
+    "bytes": 705644,
+    "sha256": "2c2f20fe40927ee7a623e7f79d60cc790ab0f7992878506c025c75397a85d28d",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "music/boss.wav",
+    "seconds": 14.2222,
+    "sample_rate": 22050,
+    "bytes": 627244,
+    "sha256": "6a15be055c82d5be9f343f3b0fc40a1e11c3fdaa2252327a1c47b00194d12f49",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "music/defeat.wav",
+    "seconds": 3.4286,
+    "sample_rate": 22050,
+    "bytes": 151244,
+    "sha256": "4885a925d2579abc948c0292b8286dea4d9446187c739155211e7b7d28596767",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "music/menu.wav",
+    "seconds": 16.0,
+    "sample_rate": 22050,
+    "bytes": 705644,
+    "sha256": "d06308ec8e44f25c4960f8615314f18ffb542eeb720a6f27f5190418c2d05156",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "music/tutorial.wav",
+    "seconds": 15.0,
+    "sample_rate": 22050,
+    "bytes": 661544,
+    "sha256": "d5b16c2f02df81a22695fb50fcd1d50db1d731c892f9fa828f58fe966d4bf5bf",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "music/victory.wav",
+    "seconds": 4.3636,
+    "sample_rate": 22050,
+    "bytes": 192480,
+    "sha256": "f43ce7a789d9a2b106d74a24a188752935677674df090a95e4983b503a882f69",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/boss_attack.wav",
+    "seconds": 0.48,
+    "sample_rate": 22050,
+    "bytes": 21212,
+    "sha256": "ecdc82270ad6e1f9524c18a7cd257e1f376107f009fbe081329f2b00cfb10c2d",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/boss_destroy.wav",
+    "seconds": 1.6,
+    "sample_rate": 22050,
+    "bytes": 70604,
+    "sha256": "b9707d55981510b04ace8b453db9f3a11f0591b4fa7124fa1e8dd61c09c0e427",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/boss_spawn.wav",
+    "seconds": 1.2,
+    "sample_rate": 22050,
+    "bytes": 52964,
+    "sha256": "bf0b5218db8842b5787dd6489401c911ce1d84c864a3985ac65affb45b0e96cd",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/button.wav",
+    "seconds": 0.1,
+    "sample_rate": 22050,
+    "bytes": 4454,
+    "sha256": "b3bf8b4f04be9c73b685f9469bf65194a40ed16e2fcbd77df56044683361cb46",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/dash.wav",
+    "seconds": 0.23,
+    "sample_rate": 22050,
+    "bytes": 10188,
+    "sha256": "a9ef050feff3abcc24d26cc6f2a20db24dac310f7d1a5fdcac8e03f1485ed729",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/defeat.wav",
+    "seconds": 1.1,
+    "sample_rate": 22050,
+    "bytes": 48554,
+    "sha256": "5961df9951c5f09c0cbbf16634e9b4f17667b84b273493e647826eb92b4130fe",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/enemy_destroy.wav",
+    "seconds": 0.35,
+    "sample_rate": 22050,
+    "bytes": 15478,
+    "sha256": "f3b3c7df72ed59caa6efe66b567c27b98f18dd96f0c1771822cb5868f6131a47",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/enemy_hurt.wav",
+    "seconds": 0.1,
+    "sample_rate": 22050,
+    "bytes": 4454,
+    "sha256": "d95d933aa7a010e2bd16d24ab0b6ecc67d9e56ef47476c302ed1e84039dd6c98",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/enemy_shot.wav",
+    "seconds": 0.2,
+    "sample_rate": 22050,
+    "bytes": 8864,
+    "sha256": "1557dc7774cc2ab2ebf8a47e86572a203fd75a4b2c23730bf5bcc0e2257d0630",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/hit.wav",
+    "seconds": 0.16,
+    "sample_rate": 22050,
+    "bytes": 7100,
+    "sha256": "c21f5666adc38f62a89517faea996a4a0dacea3f0f3d698eaa05f94cd1102a0d",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/hit_heavy.wav",
+    "seconds": 0.28,
+    "sample_rate": 22050,
+    "bytes": 12392,
+    "sha256": "d3f0753f6cd7a3bdeb684f22037068efce661f2be6cf2e6f86133ef7e56ac6b7",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/player_hurt.wav",
+    "seconds": 0.2,
+    "sample_rate": 22050,
+    "bytes": 8864,
+    "sha256": "ac482c613587f5872887c93350140e60207fc261fbd175d46fd2dc7786f2d9f3",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/projectile_hit.wav",
+    "seconds": 0.19,
+    "sample_rate": 22050,
+    "bytes": 8424,
+    "sha256": "2b51f9a67c8525b56a9246aa827ca7516c5aa1242fc350c51d00acdce39a0b59",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/spark.wav",
+    "seconds": 0.12,
+    "sample_rate": 22050,
+    "bytes": 5336,
+    "sha256": "a1ae660f5dad658d4f2afde6850e448280eb7ed08a9b1b72c55d01bb2bba85f0",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/swing.wav",
+    "seconds": 0.16,
+    "sample_rate": 22050,
+    "bytes": 7100,
+    "sha256": "324de02e24888d47a35439f2c4ab27368c42f628c69dd99907069ef08125f71b",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/swing_heavy.wav",
+    "seconds": 0.24,
+    "sample_rate": 22050,
+    "bytes": 10628,
+    "sha256": "3f5162a427b8b5c83ff9b2b1422ad961705c9e9fc0ffb0cd7e1190725e9d06f7",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/tutorial_step.wav",
+    "seconds": 0.35,
+    "sample_rate": 22050,
+    "bytes": 15478,
+    "sha256": "55c71000d3f820091a9f37437d346a2de2ef0dae688978885e133fa0bae2aa98",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/victory.wav",
+    "seconds": 0.85,
+    "sample_rate": 22050,
+    "bytes": 37528,
+    "sha256": "f5347a5cab95418483322b34576eeda22ca8c64c11d47841a7f1f367d4a67dea",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  },
+  {
+    "file": "sfx/wave_start.wav",
+    "seconds": 0.4,
+    "sample_rate": 22050,
+    "bytes": 17684,
+    "sha256": "f6d35529066a75c772d007b38e402bb019c1189f6765c0ded5a48b104b0fc4bf",
+    "source": "Original procedural synthesis: tools/generate_audio.py"
+  }
+]

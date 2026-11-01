@@ -53,6 +53,7 @@ class WeaponTests(unittest.TestCase):
     def test_finisher_miss_has_no_impact_sparks_hitstop_or_shake(self):
         world = World(seed=9)
         world.start()
+        world.tutorial.step = 'combo'
         world.enemies[0].pos = Vector2(420, 220)
         world.player.combo = 3
         world.player.combo_window = 1
@@ -67,6 +68,7 @@ class WeaponTests(unittest.TestCase):
     def test_finisher_contact_stores_world_contact_and_expires(self):
         world = World(seed=9)
         world.start()
+        world.tutorial.step = 'combo'
         enemy = world.enemies[0]
         enemy.pos = world.player.pos + Vector2(30, 0)
         world.player.combo = 3
@@ -95,6 +97,7 @@ class WeaponTests(unittest.TestCase):
                 with self.subTest(fps=fps, direction=direction):
                     world = World(seed=9)
                     world.start()
+                    world.tutorial.step = 'combo'
                     target = world.enemies[0]
                     target.pos = world.player.pos + direction * 30
                     world.attack(direction)
@@ -115,9 +118,10 @@ class WeaponTests(unittest.TestCase):
             player.update(1 / 120, Vector2())
         self.assertFalse(player.sword_trail)
 
-    def test_tutorial_exit_clears_feedback_before_next_arena(self):
+    def test_skip_tutorial_clears_feedback_before_next_arena(self):
         world = World(seed=9)
         world.start()
+        world.tutorial.step = 'combo'
         world.tutorial_hits = 3
         world.enemies[0].pos = world.player.pos + Vector2(30, 0)
         world.player.combo = 3
@@ -125,8 +129,10 @@ class WeaponTests(unittest.TestCase):
         world.attack(Vector2(1, 0))
         for _ in range(30):
             world.update(1 / 120, Vector2())
-            if world.stage == 'arena':
+            if world.impacts:
                 break
+        self.assertTrue(world.impacts)
+        world.skip_tutorial()
         self.assertEqual(world.stage, 'arena')
         self.assertEqual(world.impact, 0)
         self.assertEqual(world.shake, 0)
@@ -136,6 +142,7 @@ class WeaponTests(unittest.TestCase):
     def test_terminal_screen_feedback_decays_without_moving_actors(self):
         world = World(seed=9)
         world.start()
+        world.tutorial.step = 'combo'
         world.enemies[0].pos = world.player.pos + Vector2(30, 0)
         world.player.combo = 3
         world.player.combo_window = 1
